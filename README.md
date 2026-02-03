@@ -1,6 +1,6 @@
 # Feedback Available Flag Service
 
-Microservice that is used to flag instances based on available feedback. Designed for
+Microservice used to flag instances based on available feedback. Designed for
 the [semantic.works](https://semantic.works/) microservices stack.
 This microservice is made for [LPDC](https://github.com/lblod/app-lpdc-digitaal-loket) but can be configured via
 environment variables to be used
