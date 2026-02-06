@@ -25,8 +25,8 @@ Add the service to your `docker-compose.yml`:
   feedback-available-flag-service:
     image: lblod/feedback-available-flag-service
     environment:
-      STATUS_PREDICATE: 'https://schema.org/actionStatus'
-      STATUS_URI: 'http://lblod.data.gift/concepts/1b3c5e7f-2a4d-4c6e-9f1b-3d5a7c9e2f4b'
+      STATUS_PREDICATE: 'http://www.w3.org/ns/adms#status'
+      STATUS_URI: 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT'
       INSTANCE_TYPE: 'https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService'
       INSTANCE_PREDICATE: 'http://www.w3.org/2004/02/skos/core#primarySubject'
       HEALING_CRON: '0 3 * * *'
@@ -45,11 +45,11 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
    match: {
       predicate: {
          type: 'uri',
-                 value: 'https://schema.org/actionStatus'
+                 value: 'http://www.w3.org/ns/adms#status'
       },
       object: {
          type: 'uri',
-                 value: 'http://lblod.data.gift/concepts/1b3c5e7f-2a4d-4c6e-9f1b-3d5a7c9e2f4b'
+                 value: 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT'
       }
    },
    callback: {
@@ -70,8 +70,8 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
 
 | Variable             | Required | Default                                                                            | Description                                        |
 |----------------------|----------|------------------------------------------------------------------------------------|----------------------------------------------------|
-| `STATUS_PREDICATE`   | No       | 'https://schema.org/actionStatus'                                                  | Predicate URI that links feedback with it's status |
-| `STATUS_URI`         | No       | 'http://lblod.data.gift/concepts/1b3c5e7f-2a4d-4c6e-9f1b-3d5a7c9e2f4b'             | Object URI of the specific status to flag on       |
+| `STATUS_PREDICATE`   | No       | 'http://www.w3.org/ns/adms#status'                                                  | Predicate URI that links feedback with it's status |
+| `STATUS_URI`         | No       | 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT'             | Object URI of the specific status to flag on       |
 | `INSTANCE_TYPE`      | No       | 'https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService' | Type URI of the instance that has to be flagged    |
 | `INSTANCE_PREDICATE` | No       | 'http://www.w3.org/2004/02/skos/core#primarySubject'                               | Predicate URI that links feedback to instance      |
 | `HEALING_CRON`       | No       | '0 3 * * *'                                                                        | Cron pattern to start healing cronjob              |
