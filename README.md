@@ -23,7 +23,7 @@ Add the service to your `docker-compose.yml`:
 
 ```yaml
   feedback-available-flag-service:
-    image: local/feedback-available-flag-service
+    image: lblod/feedback-available-flag-service
     environment:
       STATUS_PREDICATE: 'https://schema.org/actionStatus'
       STATUS_URI: 'http://lblod.data.gift/concepts/1b3c5e7f-2a4d-4c6e-9f1b-3d5a7c9e2f4b'

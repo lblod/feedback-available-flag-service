@@ -107,6 +107,27 @@ class InstanceRepository {
 
     return result.results.bindings.map(binding => binding.instance.value);
   };
+
+  /**
+   * Check if an instance has any active feedbacks with the expected status.
+   * Returns true if there are active feedbacks, false otherwise.
+   */
+  static hasActiveFeedbacks = async function(instanceUri, statusPredicate, statusUri) {
+    if (!instanceUri || !statusPredicate || !statusUri)
+      throw 'instanceUri, statusPredicate and statusUri cannot be null.';
+
+    const result = await query(`
+      PREFIX schema2: <https://schema.org/>
+
+      ASK {
+        ?feedback a schema2:Conversation.
+        ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ${sparqlEscapeUri(instanceUri)}.
+        ?feedback ${sparqlEscapeUri(statusPredicate)} ${sparqlEscapeUri(statusUri)}.
+      }
+    `);
+
+    return result.boolean;
+  };
 }
 
 export default InstanceRepository;
