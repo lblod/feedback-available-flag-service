@@ -9,10 +9,10 @@ import {
     HEALING_CRON,
     INSTANCE_PREDICATE,
     INSTANCE_TYPE,
-    STATUS_PREDICATE,
-    STATUS_START_URI,
-    PROCESSING_STATUS_PREDICATE,
-    PROCESSING_STATUS_START_URI, PROCESSING_STATUS_END_URI, STATUS_END_URI
+    IPDC_STATUS_PREDICATE,
+    IPDC_STATUS_START_URI,
+    LPDC_STATUS_PREDICATE,
+    LPDC_STATUS_START_URI, LPDC_STATUS_END_URI, IPDC_STATUS_END_URI
 } from './env';
 
 console.log('Feedback Available Flag Service starting...');
@@ -20,44 +20,44 @@ if (DEBUG) {
     console.log('Debug mode enabled');
     console.log(`HEALING_CRON: ${HEALING_CRON}`);
 
-    console.log(`STATUS_PREDICATE: ${STATUS_PREDICATE}`);
-    console.log(`STATUS_START_URI: ${STATUS_START_URI}`);
-    console.log(`STATUS_END_URI: ${STATUS_END_URI}`);
+    console.log(`IPDC_STATUS_PREDICATE: ${IPDC_STATUS_PREDICATE}`);
+    console.log(`IPDC_STATUS_START_URI: ${IPDC_STATUS_START_URI}`);
+    console.log(`IPDC_STATUS_END_URI: ${IPDC_STATUS_END_URI}`);
 
     console.log(`INSTANCE_TYPE: ${INSTANCE_TYPE}`);
     console.log(`INSTANCE_PREDICATE: ${INSTANCE_PREDICATE}`);
 
-    console.log(`PROCESSING_STATUS_START_URI: ${PROCESSING_STATUS_START_URI}`);
-    console.log(`PROCESSING_STATUS_END_URI: ${PROCESSING_STATUS_END_URI}`);
-    console.log(`PROCESSING_STATUS_PREDICATE: ${PROCESSING_STATUS_PREDICATE}`);
+    console.log(`LPDC_STATUS_START_URI: ${LPDC_STATUS_START_URI}`);
+    console.log(`LPDC_STATUS_END_URI: ${LPDC_STATUS_END_URI}`);
+    console.log(`LPDC_STATUS_PREDICATE: ${LPDC_STATUS_PREDICATE}`);
 }
 app.use(bodyParser.json());
 
 /**
  * Handle missed deltas by fixing inconsistent data states.
- * 1. Sets processing-status to START for feedbacks with status AANGEMAAKT but missing processing-status.
- * 2. Sets status to BEANTWOORD for feedbacks with processing-status END but status not yet finished.
- * 3. Finds instances flagged true but without a link to the expected status and unflags them.
- * 4. Finds instances flagged false but linked to the expected status and flags them.
+ * 1. Sets lpdc-status to START for feedbacks with status ipdc-status AANGEMAAKT but missing lpdc-status.
+ * 2. Sets ipdc-status to BEANTWOORD for feedbacks with lpdc-status VERWERKT.
+ * 3. Finds instances flagged true but without a link to the expected ipdc-status and unflags them.
+ * 4. Finds instances flagged false but linked to the expected ipdc-status and flags them.
  */
 async function handleMissedDeltas() {
     try {
         console.log('Starting missed deltas healing...');
 
-        const feedbacksWithNoProcessingStatus = await InstanceRepository.findFeedbacksMissingProcessingStatus();
+        const feedbacksWithNoLpdcStatus = await InstanceRepository.findFeedbacksMissingLpdcStatus();
         if (DEBUG) {
-            console.log(`Found ${feedbacksWithNoProcessingStatus.length} feedbacks missing processing-status`);
+            console.log(`Found ${feedbacksWithNoLpdcStatus.length} feedbacks missing lpdc-status`);
         }
-        if (feedbacksWithNoProcessingStatus.length > 0) {
+        if (feedbacksWithNoLpdcStatus.length > 0) {
             await Promise.allSettled(
-                feedbacksWithNoProcessingStatus.map(feedback => InstanceRepository.setProcessingStatus(feedback))
+                feedbacksWithNoLpdcStatus.map(feedback => InstanceRepository.setLpdcStatus(feedback))
             );
-            console.log(`Successfully set processing-status for ${feedbacksWithNoProcessingStatus.length} feedbacks.`);
+            console.log(`Successfully set lpdc-status for ${feedbacksWithNoLpdcStatus.length} feedbacks.`);
         }
 
-        const feedbacksNeedingFinish = await InstanceRepository.findMissedFeedbacksWithEndProcessingStatus();
+        const feedbacksNeedingFinish = await InstanceRepository.findMissedFeedbacksWithEndLpdcStatus();
         if (DEBUG) {
-            console.log(`Found ${feedbacksNeedingFinish.length} feedbacks with END processing-status but not finished`);
+            console.log(`Found ${feedbacksNeedingFinish.length} feedbacks with END lpdc-status but not finished`);
         }
         if (feedbacksNeedingFinish.length > 0) {
             await Promise.allSettled(
@@ -128,14 +128,14 @@ app.post('/delta', (req, res) => {
     }
 
     let newFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
-        STATUS_PREDICATE, STATUS_START_URI);
+        IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI);
 
     let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
-        PROCESSING_STATUS_PREDICATE, PROCESSING_STATUS_END_URI);
+        LPDC_STATUS_PREDICATE, LPDC_STATUS_END_URI);
 
     if (DEBUG) {
         console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
-        console.log(`Extracted ${processedFeedbackInsertURIs.length} feedback processed URIs:`, processedFeedbackInsertURIs);
+        console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
     }
 
     if (!newFeedbackInsertURIs.length && !processedFeedbackInsertURIs.length) {
@@ -146,7 +146,7 @@ app.post('/delta', (req, res) => {
     if (newFeedbackInsertURIs.length) {
         DeltaService.process(newFeedbackInsertURIs, true)
             .catch(e => {
-                console.log(`Something went wrong while processing insert delta`);
+                console.log(`Something went wrong while processing new feedback deltas`);
                 console.error(e);
             });
     }
@@ -154,7 +154,7 @@ app.post('/delta', (req, res) => {
     if (processedFeedbackInsertURIs.length) {
         DeltaService.process(processedFeedbackInsertURIs, false)
             .catch(e => {
-                console.log(`Something went wrong while processing processing status delta`);
+                console.log(`Something went wrong while processing processed feedback delta`);
                 console.error(e);
             });
     }

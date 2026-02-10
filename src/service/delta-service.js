@@ -11,7 +11,7 @@ class DeltaService {
 
     if (isNewFeedback) {
       await Promise.allSettled(instances.map(instance => InstanceRepository.updateInstanceFlagged(instance, true)));
-      await Promise.allSettled(uris.map(feedback => InstanceRepository.setProcessingStatus(feedback)));
+      await Promise.allSettled(uris.map(feedback => InstanceRepository.setLpdcStatus(feedback)));
     } else {
         await Promise.allSettled(uris.map(feedback => InstanceRepository.finishFeedback(feedback)));
         await Promise.allSettled(

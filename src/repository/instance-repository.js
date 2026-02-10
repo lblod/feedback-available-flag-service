@@ -3,11 +3,11 @@ import { querySudo as query, updateSudo as update } from '@lblod/mu-auth-sudo';
 import {
   INSTANCE_TYPE,
   INSTANCE_PREDICATE,
-  PROCESSING_STATUS_START_URI,
-  PROCESSING_STATUS_END_URI,
-  PROCESSING_STATUS_PREDICATE,
-  STATUS_PREDICATE,
-  STATUS_END_URI, STATUS_START_URI
+  LPDC_STATUS_START_URI,
+  LPDC_STATUS_END_URI,
+  LPDC_STATUS_PREDICATE,
+  IPDC_STATUS_PREDICATE,
+  IPDC_STATUS_END_URI, IPDC_STATUS_START_URI
 } from '../../env';
 
 
@@ -41,8 +41,8 @@ class InstanceRepository {
    *
    */
   static updateInstanceFlagged = async function(instanceUri, flagged) {
-    if (!instanceUri)
-      throw 'instanceUri can not be null.';
+    if (!instanceUri || !INSTANCE_TYPE)
+      throw 'instanceUri AND INSTANCE_TYPE can not be null.';
 
     await update(`
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
@@ -67,69 +67,69 @@ class InstanceRepository {
   };
 
   /**
-   * Set the processing-status of given feedbackUri to starting.
+   * Set the ldpc-status of given feedbackUri to starting.
    *
    */
-  static setProcessingStatus = async function(feedbackUri) {
+  static setLpdcStatus = async function(feedbackUri) {
     if (!feedbackUri)
       throw 'feedbackUri can not be null.';
 
     await update(`
       DELETE {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(PROCESSING_STATUS_PREDICATE)} ?oldValue .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue .
         }
       }
       INSERT {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(PROCESSING_STATUS_PREDICATE)} ${sparqlEscapeUri(PROCESSING_STATUS_START_URI)}  .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_START_URI)}  .
         }
       }
       WHERE {
         GRAPH ?g {
         ${sparqlEscapeUri(feedbackUri)} a ${sparqlEscapeUri("https://schema.org/Conversation")}.
-        OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(PROCESSING_STATUS_PREDICATE)} ?oldValue . }
+        OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue . }
         }
       }
     `);
   };
 
   /**
-   * Set the status of given feedbackUri to the final stage.
+   * Set the ipdc-status of given feedbackUri to the final stage.
    *
    */
   static finishFeedback = async function(feedbackUri) {
-    if (!feedbackUri)
-      throw 'feedbackUri can not be null.';
+    if (!feedbackUri || !IPDC_STATUS_PREDICATE || !IPDC_STATUS_END_URI)
+      throw 'feedbackUri and IPDC_STATUS_PREDICATE and IPDC_STATUS_END_URI can not be null.';
 
     await update(`
       DELETE {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(STATUS_PREDICATE)} ?oldValue .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?oldValue .
         }
       }
       INSERT {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_END_URI)}  .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_END_URI)}  .
         }
       }
       WHERE {
         GRAPH ?g {
         ${sparqlEscapeUri(feedbackUri)} a ${sparqlEscapeUri("https://schema.org/Conversation")}.
-        OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(STATUS_PREDICATE)} ?oldValue . }
+        OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?oldValue . }
         }
       }
     `);
   };
 
   /**
-   * Find all instances that are flagged true but don't have the expected status.
-   * This includes instances with no feedback link at all, or instances whose
-   * feedback doesn't have the expected status.
+   * Find all instances that are flagged true but don't have the expected ipdc-status.
+   * This includes instances with no feedback link at all or instances whose
+   * feedback doesn't have the expected ipdc-status.
    */
   static findIncorrectlyFlaggedInstances = async function() {
-    if (!STATUS_PREDICATE || !STATUS_START_URI)
-      throw 'STATUS_PREDICATE and STATUS_START_URI cannot be null.';
+    if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI)
+      throw 'IPDC_STATUS_PREDICATE and IPDC_STATUS_START_URI cannot be null.';
 
     const result = await query(`
       PREFIX schema2: <https://schema.org/>
@@ -140,7 +140,7 @@ class InstanceRepository {
         FILTER NOT EXISTS {
           ?feedback a schema2:Conversation.
           ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ?instance.
-          ?feedback ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_START_URI)}.
+          ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
         }
       }
     `);
@@ -149,12 +149,12 @@ class InstanceRepository {
   };
 
   /**
-   * Find all instances that are not flagged or flagged false but have the expected status.
+   * Find all instances that are not flagged or flagged false but have the expected ipdc-status.
    *
    */
   static findUnflaggedInstancesWithStatus = async function() {
-    if (!STATUS_PREDICATE || !STATUS_START_URI)
-      throw 'statusPredicate and statusUri cannot be null.';
+    if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !INSTANCE_PREDICATE)
+      throw 'IPDC_STATUS_PREDICATE and IPDC_STATUS_START_URI and INSTANCE_PREDICATE cannot be null.';
 
     const result = await query(`
       PREFIX schema2: <https://schema.org/>
@@ -162,7 +162,7 @@ class InstanceRepository {
 
       SELECT ?instance WHERE {
         ?feedback a schema2:Conversation.
-        ?feedback ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_START_URI)}.
+        ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
         ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ?instance.
         OPTIONAL { ?instance lpdcExt:feedbackAvailable ?flagged . }
         FILTER(!BOUND(?flagged) || ?flagged = ${sparqlEscapeBool(false)})
@@ -177,8 +177,8 @@ class InstanceRepository {
    * Returns true if there are active feedbacks, false otherwise.
    */
   static hasActiveFeedbacks = async function(instanceUri) {
-    if (!instanceUri || !STATUS_PREDICATE || !STATUS_START_URI)
-      throw 'instanceUri, STATUS_PREDICATE and STATUS_START_URI cannot be null.';
+    if (!instanceUri || !IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI)
+      throw 'instanceUri, IPDC_STATUS_PREDICATE and IPDC_STATUS_START_URI cannot be null.';
 
     const result = await query(`
       PREFIX schema2: <https://schema.org/>
@@ -186,7 +186,7 @@ class InstanceRepository {
       ASK {
         ?feedback a schema2:Conversation.
         ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ${sparqlEscapeUri(instanceUri)}.
-        ?feedback ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_START_URI)}.
+        ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
       }
     `);
 
@@ -194,21 +194,21 @@ class InstanceRepository {
   };
 
   /**
-   * Find all feedbacks that have status AANGEMAAKT but are missing processing-status.
-   * These feedbacks should have their processing-status set to START.
+   * Find all feedbacks that have ipdc-status AANGEMAAKT but are missing lpdc-status.
+   * These feedbacks should have their lpdc-status set to OPEN.
    */
-  static findFeedbacksMissingProcessingStatus = async function() {
-    if (!STATUS_PREDICATE || !STATUS_START_URI || !PROCESSING_STATUS_PREDICATE)
-      throw 'STATUS_PREDICATE, STATUS_START_URI, and PROCESSING_STATUS_PREDICATE cannot be null.';
+  static findFeedbacksMissingLpdcStatus = async function() {
+    if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !LPDC_STATUS_PREDICATE)
+      throw 'IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, and LPDC_STATUS_PREDICATE cannot be null.';
 
     const result = await query(`
       PREFIX schema2: <https://schema.org/>
 
       SELECT ?feedback WHERE {
         ?feedback a schema2:Conversation.
-        ?feedback ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_START_URI)}.
+        ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
         FILTER NOT EXISTS {
-          ?feedback ${sparqlEscapeUri(PROCESSING_STATUS_PREDICATE)} ?processingStatus.
+          ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?processingStatus.
         }
       }
     `);
@@ -217,20 +217,20 @@ class InstanceRepository {
   };
 
   /**
-   * Find all feedbacks that have processing-status END and status still in START (AANGEMAAKT).
-   * These feedbacks should have their status set to BEANTWOORD.
+   * Find all feedbacks that have lpdc-status VEWERKT and ipdc-status still in START (AANGEMAAKT).
+   * These feedbacks should have their ipdc-status set to BEANTWOORD.
    */
-  static findMissedFeedbacksWithEndProcessingStatus = async function() {
-    if (!STATUS_PREDICATE || !STATUS_START_URI || !STATUS_END_URI || !PROCESSING_STATUS_PREDICATE || !PROCESSING_STATUS_END_URI)
-      throw 'STATUS_PREDICATE, STATUS_START_URI, STATUS_END_URI, PROCESSING_STATUS_PREDICATE, and PROCESSING_STATUS_END_URI cannot be null.';
+  static findMissedFeedbacksWithEndLpdcStatus = async function() {
+    if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !IPDC_STATUS_END_URI || !LPDC_STATUS_PREDICATE || !LPDC_STATUS_END_URI)
+      throw 'IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, IPDC_STATUS_END_URI, LPDC_STATUS_PREDICATE, and LPDC_STATUS_END_URI cannot be null.';
 
     const result = await query(`
       PREFIX schema2: <https://schema.org/>
 
       SELECT ?feedback WHERE {
         ?feedback a schema2:Conversation.
-        ?feedback ${sparqlEscapeUri(PROCESSING_STATUS_PREDICATE)} ${sparqlEscapeUri(PROCESSING_STATUS_END_URI)}.
-        ?feedback ${sparqlEscapeUri(STATUS_PREDICATE)} ${sparqlEscapeUri(STATUS_START_URI)}.
+        ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
+        ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
       }
     `);
 
