@@ -4,29 +4,69 @@ import DeltaService from "./src/service/delta-service";
 import InstanceRepository from "./src/repository/instance-repository";
 import {CronJob} from 'cron';
 import bodyParser from 'body-parser';
-import {DEBUG, HEALING_CRON, INSTANCE_PREDICATE, INSTANCE_TYPE, STATUS_PREDICATE, STATUS_URI} from './env';
+import {
+    DEBUG,
+    HEALING_CRON,
+    INSTANCE_PREDICATE,
+    INSTANCE_TYPE,
+    STATUS_PREDICATE,
+    STATUS_START_URI,
+    PROCESSING_STATUS_PREDICATE,
+    PROCESSING_STATUS_START_URI, PROCESSING_STATUS_END_URI, STATUS_END_URI
+} from './env';
 
 console.log('Feedback Available Flag Service starting...');
 if (DEBUG) {
     console.log('Debug mode enabled');
-    console.log(`STATUS_URI: ${STATUS_URI}`);
+    console.log(`HEALING_CRON: ${HEALING_CRON}`);
+
     console.log(`STATUS_PREDICATE: ${STATUS_PREDICATE}`);
+    console.log(`STATUS_START_URI: ${STATUS_START_URI}`);
+    console.log(`STATUS_END_URI: ${STATUS_END_URI}`);
+
     console.log(`INSTANCE_TYPE: ${INSTANCE_TYPE}`);
     console.log(`INSTANCE_PREDICATE: ${INSTANCE_PREDICATE}`);
-    console.log(`HEALING_CRON: ${HEALING_CRON}`);
+
+    console.log(`PROCESSING_STATUS_START_URI: ${PROCESSING_STATUS_START_URI}`);
+    console.log(`PROCESSING_STATUS_END_URI: ${PROCESSING_STATUS_END_URI}`);
+    console.log(`PROCESSING_STATUS_PREDICATE: ${PROCESSING_STATUS_PREDICATE}`);
 }
 app.use(bodyParser.json());
 
 /**
- * Handle missed deltas by fixing incorrectly flagged instances.
- * 1. Finds instances flagged true but without a link to the expected status and unflags them.
- * 2. Finds instances flagged false but linked to the expected status and flags them.
+ * Handle missed deltas by fixing inconsistent data states.
+ * 1. Sets processing-status to START for feedbacks with status AANGEMAAKT but missing processing-status.
+ * 2. Sets status to BEANTWOORD for feedbacks with processing-status END but status not yet finished.
+ * 3. Finds instances flagged true but without a link to the expected status and unflags them.
+ * 4. Finds instances flagged false but linked to the expected status and flags them.
  */
 async function handleMissedDeltas() {
     try {
         console.log('Starting missed deltas healing...');
 
-        const incorrectlyFlaggedInstances = await InstanceRepository.findIncorrectlyFlaggedInstances(STATUS_PREDICATE, STATUS_URI);
+        const feedbacksWithNoProcessingStatus = await InstanceRepository.findFeedbacksMissingProcessingStatus();
+        if (DEBUG) {
+            console.log(`Found ${feedbacksWithNoProcessingStatus.length} feedbacks missing processing-status`);
+        }
+        if (feedbacksWithNoProcessingStatus.length > 0) {
+            await Promise.allSettled(
+                feedbacksWithNoProcessingStatus.map(feedback => InstanceRepository.setProcessingStatus(feedback))
+            );
+            console.log(`Successfully set processing-status for ${feedbacksWithNoProcessingStatus.length} feedbacks.`);
+        }
+
+        const feedbacksNeedingFinish = await InstanceRepository.findMissedFeedbacksWithEndProcessingStatus();
+        if (DEBUG) {
+            console.log(`Found ${feedbacksNeedingFinish.length} feedbacks with END processing-status but not finished`);
+        }
+        if (feedbacksNeedingFinish.length > 0) {
+            await Promise.allSettled(
+                feedbacksNeedingFinish.map(feedback => InstanceRepository.finishFeedback(feedback))
+            );
+            console.log(`Successfully finished ${feedbacksNeedingFinish.length} feedbacks.`);
+        }
+
+        const incorrectlyFlaggedInstances = await InstanceRepository.findIncorrectlyFlaggedInstances();
         if (DEBUG) {
             console.log(`Found ${incorrectlyFlaggedInstances.length} incorrectly flagged instances (should be false)`);
         }
@@ -37,7 +77,7 @@ async function handleMissedDeltas() {
             console.log(`Successfully unflagged ${incorrectlyFlaggedInstances.length} instances.`);
         }
 
-        const unflaggedInstances = await InstanceRepository.findUnflaggedInstancesWithStatus(STATUS_PREDICATE, STATUS_URI);
+        const unflaggedInstances = await InstanceRepository.findUnflaggedInstancesWithStatus();
         if (DEBUG) {
             console.log(`Found ${unflaggedInstances.length} unflagged instances (should be true)`);
         }
@@ -87,34 +127,34 @@ app.post('/delta', (req, res) => {
         console.log('Delta body:', JSON.stringify(req.body, null, 2));
     }
 
-    let feedbackInsertURIs = new Delta(req.body).getInsertsFor(
-        STATUS_PREDICATE, STATUS_URI);
+    let newFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
+        STATUS_PREDICATE, STATUS_START_URI);
 
-    let feedbackDeleteURIs = new Delta(req.body).getDeletesFor(
-        STATUS_PREDICATE, STATUS_URI);
+    let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
+        PROCESSING_STATUS_PREDICATE, PROCESSING_STATUS_END_URI);
 
     if (DEBUG) {
-        console.log(`Extracted ${feedbackInsertURIs.length} insert URIs:`, feedbackInsertURIs);
-        console.log(`Extracted ${feedbackDeleteURIs.length} delete URIs:`, feedbackDeleteURIs);
+        console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
+        console.log(`Extracted ${processedFeedbackInsertURIs.length} feedback processed URIs:`, processedFeedbackInsertURIs);
     }
 
-    if (!feedbackInsertURIs.length && !feedbackDeleteURIs.length) {
+    if (!newFeedbackInsertURIs.length && !processedFeedbackInsertURIs.length) {
         console.log('Delta did not contain any feedback status changes, awaiting the next batch!');
         return res.status(204).send();
     }
 
-    if (feedbackInsertURIs.length) {
-        DeltaService.process(feedbackInsertURIs, true)
+    if (newFeedbackInsertURIs.length) {
+        DeltaService.process(newFeedbackInsertURIs, true)
             .catch(e => {
                 console.log(`Something went wrong while processing insert delta`);
                 console.error(e);
             });
     }
 
-    if (feedbackDeleteURIs.length) {
-        DeltaService.process(feedbackDeleteURIs, false)
+    if (processedFeedbackInsertURIs.length) {
+        DeltaService.process(processedFeedbackInsertURIs, false)
             .catch(e => {
-                console.log(`Something went wrong while processing delete delta`);
+                console.log(`Something went wrong while processing processing status delta`);
                 console.error(e);
             });
     }
