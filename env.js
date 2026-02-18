@@ -2,7 +2,6 @@ import env from 'env-var';
 
 const IPDC_STATUS_PREDICATE = env.get('IPDC_STATUS_PREDICATE').default('http://www.w3.org/ns/adms#status').asString();
 const IPDC_STATUS_START_URI = env.get('IPDC_STATUS_START_URI').default('https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT').asString();
-const IPDC_STATUS_END_URI = env.get('IPDC_STATUS_END_URI').default('https://ipdc.vlaanderen.be/ns/FeedbackStatus#BEANTWOORD').asString();
 
 const INSTANCE_PREDICATE = env.get('INSTANCE_PREDICATE').default('http://www.w3.org/2004/02/skos/core#primarySubject').asString();
 const INSTANCE_TYPE = env.get('INSTANCE_TYPE').default('https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService').asString();
@@ -18,4 +17,15 @@ const INGEST_CRON = env.get('INGEST_CRON').default('*/5 * * * *').asString();
 const DEBUG = env.get('DEBUG').default('false').asBool();
 
 
-export { IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, IPDC_STATUS_END_URI, INSTANCE_PREDICATE, INSTANCE_TYPE, LPDC_STATUS_PREDICATE, LPDC_STATUS_START_URI, LPDC_STATUS_END_URI, HEALING_CRON, INGEST_CRON, DEBUG };
+export {
+    IPDC_STATUS_PREDICATE,
+    IPDC_STATUS_START_URI,
+    INSTANCE_PREDICATE,
+    INSTANCE_TYPE,
+    LPDC_STATUS_PREDICATE,
+    LPDC_STATUS_START_URI,
+    LPDC_STATUS_END_URI,
+    HEALING_CRON,
+    INGEST_CRON,
+    DEBUG
+};

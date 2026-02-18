@@ -13,7 +13,9 @@ import {
     IPDC_STATUS_PREDICATE,
     IPDC_STATUS_START_URI,
     LPDC_STATUS_PREDICATE,
-    LPDC_STATUS_START_URI, LPDC_STATUS_END_URI, IPDC_STATUS_END_URI, INGEST_CRON
+    LPDC_STATUS_START_URI,
+    LPDC_STATUS_END_URI,
+    INGEST_CRON
 } from './env.js';
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
@@ -25,7 +27,6 @@ if (DEBUG) {
 
     console.log(`IPDC_STATUS_PREDICATE: ${IPDC_STATUS_PREDICATE}`);
     console.log(`IPDC_STATUS_START_URI: ${IPDC_STATUS_START_URI}`);
-    console.log(`IPDC_STATUS_END_URI: ${IPDC_STATUS_END_URI}`);
 
     console.log(`INSTANCE_TYPE: ${INSTANCE_TYPE}`);
     console.log(`INSTANCE_PREDICATE: ${INSTANCE_PREDICATE}`);
@@ -39,9 +40,8 @@ app.use(bodyParser.json());
 /**
  * Handle missed deltas by fixing inconsistent data states.
  * 1. Sets lpdc-status to START for feedbacks with status ipdc-status AANGEMAAKT but missing lpdc-status.
- * 2. Sets ipdc-status to BEANTWOORD for feedbacks with lpdc-status VERWERKT.
- * 3. Finds instances flagged true but without a link to the expected ipdc-status and unflags them.
- * 4. Finds instances flagged false but linked to the expected ipdc-status and flags them.
+ * 2. Finds instances flagged true but without a link to the expected ipdc-status and unflags them.
+ * 3. Finds instances flagged false but linked to the expected ipdc-status and flags them.
  */
 async function handleMissedDeltas() {
     try {
@@ -56,17 +56,6 @@ async function handleMissedDeltas() {
                 feedbacksWithNoLpdcStatus.map(feedback => InstanceRepository.setLpdcStatus(feedback))
             );
             console.log(`Successfully set lpdc-status for ${feedbacksWithNoLpdcStatus.length} feedbacks.`);
-        }
-
-        const feedbacksNeedingFinish = await InstanceRepository.findMissedFeedbacksWithEndLpdcStatus();
-        if (DEBUG) {
-            console.log(`Found ${feedbacksNeedingFinish.length} feedbacks with END lpdc-status but not finished`);
-        }
-        if (feedbacksNeedingFinish.length > 0) {
-            await Promise.allSettled(
-                feedbacksNeedingFinish.map(feedback => InstanceRepository.finishFeedback(feedback))
-            );
-            console.log(`Successfully finished ${feedbacksNeedingFinish.length} feedbacks.`);
         }
 
         const incorrectlyFlaggedInstances = await InstanceRepository.findIncorrectlyFlaggedInstances();
@@ -158,14 +147,6 @@ new CronJob(
     true,
 );
 
-
-/**
- * Health check
- */
-app.get('/', (req, res) => {
-    res.send("Hello, you've reached the feedback-available-flag-service.");
-});
-
 /**
  * Delta endpoint
  */
@@ -209,4 +190,12 @@ app.post('/delta', (req, res) => {
 
     console.log('Started processing delta, awaiting the next batch!');
     return res.status(204).send().end();
+});
+
+
+/**
+ * Health check
+ */
+app.get('/', (req, res) => {
+    res.send("Hello, you've reached the feedback-available-flag-service.");
 });
