@@ -12,8 +12,7 @@ environment variables to be used in other applications that use the same feedbac
    feedback.
 3. The service updates the `lpdcExt:feedbackAvailable` flag on the instance resource and sets the configured 'start'
    status on the feedback.
-4. When a feedback's status is changed to the configured 'end' status, it sets the ipdc-status to the
-   configured 'end' ipdc-status and it unflags the instance if there are no other linked feedbacks in the 'start'
+4. When a feedback's status is changed to the configured 'end' status, it unflags the instance if there are no other linked feedbacks in the 'start'
    ipdc-status.
 
 There is also a cronjob that runs daily to make sure missed deltas are handled.
@@ -89,7 +88,6 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
 |-------------------------|----------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | `IPDC_STATUS_PREDICATE` | No       | 'http://www.w3.org/ns/adms#status'                                                 | Predicate URI that links feedback with it's ipdc-status                                             |
 | `IPDC_STATUS_START_URI` | No       | 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT'                          | Object URI of the specific ipdc-status to flag on                                                   |
-| `IPDC_STATUS_END_URI`   | No       | 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#BEANTWOORD'                          | Object URI of the specific ipdc-status to change to when lpdc-status has `LPDC_STATUS_END_URI`      |
 | `INSTANCE_PREDICATE`    | No       | 'http://www.w3.org/2004/02/skos/core#primarySubject'                               | Predicate URI that links feedback to instance                                                       |
 | `INSTANCE_TYPE`         | No       | 'https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService' | Type URI of the instance that has to be flagged                                                     |
 | `LPDC_STATUS_PREDICATE` | No       | 'https://schema.org/actionStatus'                                                  | Predicate URI that links feedback with it's lpdc-status                                             |
