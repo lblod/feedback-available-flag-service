@@ -1,7 +1,8 @@
 import {app} from 'mu';
-import Delta from "./src/model/delta";
-import DeltaService from "./src/service/delta-service";
-import InstanceRepository from "./src/repository/instance-repository";
+import Delta from "./src/model/delta.js";
+import DeltaService from "./src/service/delta-service.js";
+import InstanceRepository from "./src/repository/instance-repository.js";
+
 import {CronJob} from 'cron';
 import bodyParser from 'body-parser';
 import {
@@ -12,8 +13,10 @@ import {
     IPDC_STATUS_PREDICATE,
     IPDC_STATUS_START_URI,
     LPDC_STATUS_PREDICATE,
-    LPDC_STATUS_START_URI, LPDC_STATUS_END_URI, IPDC_STATUS_END_URI
-} from './env';
+    LPDC_STATUS_START_URI, LPDC_STATUS_END_URI, IPDC_STATUS_END_URI, INGEST_CRON
+} from './env.js';
+import LdesRepository from "./src/repository/ldes-repository.js";
+import LdesService from "./src/service/ldes-service.js";
 
 console.log('Feedback Available Flag Service starting...');
 if (DEBUG) {
@@ -105,6 +108,51 @@ new CronJob(
             `Missed delta's healing triggered by cron job at ${new Date().toISOString()}`,
         );
         await handleMissedDeltas();
+    },
+    null,
+    true,
+);
+
+
+
+
+/**
+ * Handles ldes ingesting:
+ */
+async function handleLdesIngest() {
+    try {
+        console.log('Starting ldes ingesting...');
+
+        let snapshotsURIs = await LdesRepository.findToProcessSnapshots()
+
+        console.log(`Found ${snapshotsURIs.length} snapshots to process`);
+        console.log(snapshotsURIs);
+
+        if (snapshotsURIs.length) {
+            LdesService.process(snapshotsURIs)
+                .catch(e => {
+                    console.log(`Something went wrong while processing snapshots`);
+                    console.error(e);
+                });
+        }
+
+        console.log('Ldes ingest complete.');
+    } catch (error) {
+        console.error('Error ldes ingesting:', error);
+        throw error;
+    }
+}
+
+/**
+ * cronjob for handling feedback ldes ingesting
+ */
+new CronJob(
+    INGEST_CRON,
+    async function () {
+        console.log(
+            `Handling feedback ldes ingesting at ${new Date().toISOString()}`,
+        );
+        await handleLdesIngest();
     },
     null,
     true,
