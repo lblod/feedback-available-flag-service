@@ -1,22 +1,21 @@
-import {sparqlEscapeBool, sparqlEscapeUri, uuid} from 'mu';
+import {sparqlEscapeUri, uuid} from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
 import {transformIpdcToLpdcUri} from "../utils/uri-utils";
-
-const LDES_GRAPH = 'http://mu.semte.ch/graphs/lpdc/conceptsnapshots-ldes-data/ipdc-feedback';
+import {DEBUG, LDES_GRAPH} from "../../env";
 
 class LdesRepository {
-
-
     static findToProcessSnapshots = async function () {
 
-        const result = await query( `
+        //Change logic to use something in the data itself not in ldes graph (NO MARKERS)
+
+        const result = await query(`
             SELECT ?snapshotUri WHERE {
-                GRAPH ${sparqlEscapeUri("http://mu.semte.ch/graphs/lpdc/conceptsnapshots-ldes-data/ipdc-feedback")} {
+                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                      ?snapshotUri a ${sparqlEscapeUri("https://schema.org/DataFeedItem")} .
                      ?snapshotUri <https://schema.org/dateCreated> ?generatedAtTime .
                 }
                 FILTER NOT EXISTS {
-                GRAPH ${sparqlEscapeUri("http://mu.semte.ch/graphs/lpdc/conceptsnapshots-ldes-data/ipdc-feedback")} {
+                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ?marker a <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#VersionedLdesSnapshotProcessedMarker> .
                         ?marker <http://mu.semte.ch/vocabularies/ext/processedSnapshot> ?snapshotUri .
                     }
@@ -94,17 +93,43 @@ class LdesRepository {
     };
 
     /**
+     * Check if the given feedbackUri is already in lpdc data
+     */
+    static checkIfFeedbackInLpdcData = async function (feedbackUri) {
+        if (!feedbackUri)
+            throw 'feedbackUri cannot be null.';
+
+        const result = await query(`
+            PREFIX schema: <https://schema.org/>
+
+            SELECT ?g WHERE {
+                GRAPH ?g {
+                    ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
+                }
+                FILTER (?g != ${sparqlEscapeUri(LDES_GRAPH)})
+            }
+        `);
+
+        if (result.results.bindings.length > 0) {
+            return result.results.bindings[0].g.value;
+        } else {
+            return null;
+        }
+    };
+
+
+    /**
      * Copy feedback data from LDES graph to organization graph.
      * This recursively copies all triples where feedbackUri is the subject,
      * including nested blank nodes.
      */
-    static copyFeedbackToOrganizationGraph = async function (feedbackUri, targetGraph) {
+    static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph) {
         if (!feedbackUri)
             throw 'feedbackUri cannot be null.';
+        if (!bestuurseenheidUri)
+            throw 'bestuurseenheidUri cannot be null.';
         if (!targetGraph)
             throw 'targetGraph cannot be null.';
-
-        console.log(`  Copying feedback data from LDES graph to ${targetGraph}`);
 
         const instanceUriResult = await query(`
           PREFIX schema: <https://schema.org/>
@@ -119,42 +144,90 @@ class LdesRepository {
 
         const instanceUri = instanceUriResult.results.bindings[0]?.instanceUri?.value;
         let transformedUri;
-        if(instanceUri){
+        if (instanceUri) {
             transformedUri = transformIpdcToLpdcUri(instanceUri);
-        }
-        else{
+        } else {
             throw 'feedback has no instance linked to it.';
         }
 
         await update(`
           PREFIX schema: <https://schema.org/>
-
+          PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+                    
           INSERT {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
               ${sparqlEscapeUri(feedbackUri)} ?p ?o .
               ?o ?pp ?nested .
+              ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedUri)} .
+              ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
           }
           }
           WHERE {
               {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                      FILTER(?p != schema:about)
                       OPTIONAL { ?o ?pp ?nested . }
                   }
-              }
-              UNION
-              {
-                  GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                      ${sparqlEscapeUri(feedbackUri)} schema:about ?originalAbout .
-                  }
-                  BIND(schema:about AS ?p)
-                  BIND(${sparqlEscapeUri(transformedUri)} AS ?o)
               }
           }
       `);
 
-        console.log(`  ✓ Copied feedback data for ${feedbackUri}`);
+        if (DEBUG) {
+            console.log(`  ✓ Copied feedback data for ${feedbackUri}`);
+        }
+    };
+
+
+    /**
+     * Update existing feedback data in organization graph.
+     * This deletes the old feedback data and copies the new version from LDES graph.
+     * Enriched data is ignored and stays the same.
+     * Uses a single atomic DELETE/INSERT operation to prevent data loss.
+     */
+    static updateFeedbackInOrganizationGraph = async function (feedbackUri, targetGraph) {
+        if (!feedbackUri)
+            throw 'feedbackUri cannot be null.';
+        if (!targetGraph)
+            throw 'targetGraph cannot be null.';
+
+        await update(`
+            PREFIX schema: <https://schema.org/>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+            PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+
+            DELETE {
+                GRAPH ${sparqlEscapeUri(targetGraph)} {
+                    ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+                    ?o ?pp ?nested .
+                }
+            }
+            INSERT {
+                GRAPH ${sparqlEscapeUri(targetGraph)} {
+                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
+                    ?oNew ?ppNew ?nestedNew .
+                }
+            }
+            WHERE {
+                {
+                    GRAPH ${sparqlEscapeUri(targetGraph)} {
+                        ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid))
+                        OPTIONAL { ?o ?pp ?nested . }
+                    }
+                }
+                {
+                    GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                        ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
+                        OPTIONAL { ?oNew ?ppNew ?nestedNew . }
+                    }
+                }
+            }
+        `);
+
+        if (DEBUG) {
+            console.log(`  ✓ Updated feedback data for ${feedbackUri} in graph ${targetGraph}`);
+        }
     };
 
 

@@ -15,7 +15,8 @@ import {
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_START_URI,
     LPDC_STATUS_END_URI,
-    INGEST_CRON
+    INGEST_CRON,
+    LDES_GRAPH
 } from './env.js';
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
@@ -24,16 +25,15 @@ console.log('Feedback Available Flag Service starting...');
 if (DEBUG) {
     console.log('Debug mode enabled');
     console.log(`HEALING_CRON: ${HEALING_CRON}`);
-
+    console.log(`INGEST_CRON: ${INGEST_CRON}`);
     console.log(`IPDC_STATUS_PREDICATE: ${IPDC_STATUS_PREDICATE}`);
     console.log(`IPDC_STATUS_START_URI: ${IPDC_STATUS_START_URI}`);
-
     console.log(`INSTANCE_TYPE: ${INSTANCE_TYPE}`);
     console.log(`INSTANCE_PREDICATE: ${INSTANCE_PREDICATE}`);
-
     console.log(`LPDC_STATUS_START_URI: ${LPDC_STATUS_START_URI}`);
     console.log(`LPDC_STATUS_END_URI: ${LPDC_STATUS_END_URI}`);
     console.log(`LPDC_STATUS_PREDICATE: ${LPDC_STATUS_PREDICATE}`);
+    console.log(`LDES_GRAPH: ${LDES_GRAPH}`);
 }
 app.use(bodyParser.json());
 
@@ -102,16 +102,11 @@ new CronJob(
     true,
 );
 
-
-
-
 /**
  * Handles ldes ingesting:
  */
 async function handleLdesIngest() {
     try {
-        console.log('Starting ldes ingesting...');
-
         let snapshotsURIs = await LdesRepository.findToProcessSnapshots()
 
         console.log(`Found ${snapshotsURIs.length} snapshots to process`);
@@ -125,7 +120,7 @@ async function handleLdesIngest() {
                 });
         }
 
-        console.log('Ldes ingest complete.');
+        console.log('Started ldes ingest');
     } catch (error) {
         console.error('Error ldes ingesting:', error);
         throw error;
