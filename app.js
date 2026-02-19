@@ -21,7 +21,7 @@ import {
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
 
-console.log('Feedback Available Flag Service starting...');
+console.log('lpdc feedback management service starting...');
 if (DEBUG) {
     console.log('Debug mode enabled');
     console.log(`HEALING_CRON: ${HEALING_CRON}`);
@@ -192,5 +192,5 @@ app.post('/delta', (req, res) => {
  * Health check
  */
 app.get('/', (req, res) => {
-    res.send("Hello, you've reached the feedback-available-flag-service.");
+    res.send("Hello, you've reached the lpdc-feedback-management-service.");
 });

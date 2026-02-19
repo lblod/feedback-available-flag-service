@@ -1,4 +1,4 @@
-# Feedback Available Flag Service
+# Lpdc Feedback Management Service
 
 Microservice used to flag instances based on available feedback. Designed for
 the [semantic.works](https://semantic.works/) microservices stack.
@@ -24,8 +24,8 @@ There is also a cronjob that runs daily to make sure missed deltas are handled.
 Add the service to your `docker-compose.yml`:
 
 ```yaml
-  feedback-available-flag-service:
-    image: lblod/feedback-available-flag-service
+  lpdc-feedback-management-service:
+    image: lblod/lpdc-feedback-management-service
     labels:
       - "logging=true"
     restart: always
@@ -48,7 +48,7 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
       }
    },
    callback: {
-      url: 'http://feedback-available-flag-service/delta',
+      url: 'http://lpdc-feedback-management-service/delta',
               method: 'POST'
    },
    options: {
@@ -69,7 +69,7 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
       }
    },
    callback: {
-      url: 'http://feedback-available-flag-service/delta',
+      url: 'http://lpdc-feedback-management-service/delta',
               method: 'POST'
    },
    options: {
