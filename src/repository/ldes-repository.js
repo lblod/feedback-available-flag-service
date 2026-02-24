@@ -1,24 +1,32 @@
-import {sparqlEscapeUri, uuid} from 'mu';
+import {sparqlEscapeUri} from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
 import {transformIpdcToLpdcUri} from "../utils/uri-utils";
-import {DEBUG, LDES_GRAPH} from "../../env";
+import {DEBUG, LDES_GRAPH, UNKNOWN_GRAPH} from "../../env";
 
 class LdesRepository {
+
+    /**
+     * Get all snapshots from the ldes graph that have not been processed.
+     * To check if a snapshot has been processed, we look at if the same uri exists outside the ldes graph
+     * with the same prov:generatedAtTime
+     */
     static findToProcessSnapshots = async function () {
-
-        //Change logic to use something in the data itself not in ldes graph (NO MARKERS)
-
         const result = await query(`
+            PREFIX schema: <https://schema.org/>
+            PREFIX prov:   <https://www.w3.org/ns/prov#>
+            
             SELECT ?snapshotUri WHERE {
                 GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                     ?snapshotUri a ${sparqlEscapeUri("https://schema.org/DataFeedItem")} .
-                     ?snapshotUri <https://schema.org/dateCreated> ?generatedAtTime .
+                     ?snapshotUri a schema:Conversation .
+                     ?snapshotUri prov:generatedAtTime ?generatedAtTime .
                 }
                 FILTER NOT EXISTS {
-                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                        ?marker a <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#VersionedLdesSnapshotProcessedMarker> .
-                        ?marker <http://mu.semte.ch/vocabularies/ext/processedSnapshot> ?snapshotUri .
+                GRAPH ?g {
+                        ?snapshotUri prov:generatedAtTime ?generatedAtTime2 .
                     }
+                FILTER(
+                    ?g != ${sparqlEscapeUri(LDES_GRAPH)} &&
+                    ?generatedAtTime2 = ?generatedAtTime)
                 }
             } ORDER BY ?generatedAtTime
         `);
@@ -41,9 +49,9 @@ class LdesRepository {
 
             SELECT DISTINCT ?senderUri ?recipientUri WHERE {
                 GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                    ${sparqlEscapeUri(snapshotUri)} schema:item ?feedback .
+                    ${sparqlEscapeUri(snapshotUri)} a schema:Conversation .
 
-                    ?feedback schema:question ?question .
+                    ${sparqlEscapeUri(snapshotUri)} schema:question ?question .
 
                      ?question schema:agent ?senderUri .
                      ?question schema:recipient ?recipientUri .
@@ -67,31 +75,6 @@ class LdesRepository {
         };
     };
 
-
-    /**
-     * Get the feedback URI from a snapshot using schema:item
-     */
-    static getFeedbackUri = async function (snapshotUri) {
-        if (!snapshotUri)
-            throw 'snapshotUri cannot be null.';
-
-        const result = await query(`
-            PREFIX schema: <https://schema.org/>
-
-            SELECT ?feedback WHERE {
-                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                    ${sparqlEscapeUri(snapshotUri)} schema:item ?feedback .
-                }
-            }
-        `);
-
-        if (result.results.bindings.length === 0) {
-            throw `No feedback URI found for snapshot ${snapshotUri}`;
-        }
-
-        return result.results.bindings[0].feedback.value;
-    };
-
     /**
      * Check if the given feedbackUri is already in lpdc data
      */
@@ -106,7 +89,7 @@ class LdesRepository {
                 GRAPH ?g {
                     ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
                 }
-                FILTER (?g != ${sparqlEscapeUri(LDES_GRAPH)})
+                FILTER (?g != ${sparqlEscapeUri(LDES_GRAPH)} && ?g != ${sparqlEscapeUri(UNKNOWN_GRAPH)})
             }
         `);
 
@@ -180,10 +163,77 @@ class LdesRepository {
 
 
     /**
+     * Add feedbackUri to the unknown receiver graph.
+     */
+    static addFeedbackToUnknownGraph = async function (feedbackUri) {
+        if (!feedbackUri)
+            throw 'feedbackUri cannot be null.';
+
+        await update(`
+          PREFIX schema: <https://schema.org/>
+          PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+          PREFIX prov: <https://www.w3.org/ns/prov#>
+
+          DELETE {
+              GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
+                  ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+              }
+          }
+          INSERT {
+              GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
+                  ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
+                  ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
+              }
+          }
+          WHERE {
+              {
+                  GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                      ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
+                      ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
+                  }
+              }
+              OPTIONAL {
+                  GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
+                      ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+                  }
+              }
+          }
+      `);
+
+        if (DEBUG) {
+            console.log(`  ✓ Added/updated ${feedbackUri} in unknown graph`);
+        }
+    };
+
+    /**
+     * Remove feedbackUri from the unknown receiver graph.
+     */
+    static removeFeedbackFromUnknownGraph = async function (feedbackUri) {
+        if (!feedbackUri)
+            throw 'feedbackUri cannot be null.';
+
+        await update(`
+          PREFIX schema: <https://schema.org/>
+
+          DELETE {
+              GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
+                  ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+              }
+          }
+          WHERE {
+              GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
+                  ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+              }
+          }
+      `);
+    };
+
+
+    /**
      * Update existing feedback data in organization graph.
      * This deletes the old feedback data and copies the new version from LDES graph.
      * Enriched data is ignored and stays the same.
-     * Uses a single atomic DELETE/INSERT operation to prevent data loss.
      */
     static updateFeedbackInOrganizationGraph = async function (feedbackUri, targetGraph) {
         if (!feedbackUri)
@@ -228,31 +278,6 @@ class LdesRepository {
         if (DEBUG) {
             console.log(`  ✓ Updated feedback data for ${feedbackUri} in graph ${targetGraph}`);
         }
-    };
-
-
-    /**
-     * Mark a snapshot as processed by creating a marker in the LDES graph.
-     */
-    static markSnapshotAsProcessed = async function (snapshotUri) {
-        if (!snapshotUri)
-            throw 'snapshotUri cannot be null.';
-
-        const markerUri = `http://mu.semte.ch/vocabularies/ext/processed-snapshot-marker/${uuid()}`;
-
-        await update(`
-            PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-            PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-
-            INSERT DATA {
-                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                    ${sparqlEscapeUri(markerUri)} a lpdcExt:VersionedLdesSnapshotProcessedMarker ;
-                        ext:processedSnapshot ${sparqlEscapeUri(snapshotUri)} .
-                }
-            }
-        `);
-
-        console.log(`Marked snapshot ${snapshotUri} as processed`);
     };
 }
 

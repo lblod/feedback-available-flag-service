@@ -8,41 +8,39 @@ class LdesService {
     /**
      * Process the given list of snapshot URIs.
      */
-    static process = async function (snapshotUris) {
-        if (!snapshotUris || snapshotUris.length === 0) {
+    static process = async function (feedbackUris) {
+        if (!feedbackUris || feedbackUris.length === 0) {
             console.log('No snapshots to process.');
             return;
         }
-        console.log(`Processing ${snapshotUris.length} snapshots...`);
 
-        for (const snapshotUri of snapshotUris) {
+        for (const feedbackUri of feedbackUris) {
             try {
-                console.log(`\n--- Processing snapshot: ${snapshotUri} ---`);
-                const feedbackUri = await LdesRepository.getFeedbackUri(snapshotUri);
+                console.log(`\n--- Processing snapshot: ${feedbackUri} ---`);
                 const lpdcFeedbackOrganizationGraph = await LdesRepository.checkIfFeedbackInLpdcData(feedbackUri);
                 if (lpdcFeedbackOrganizationGraph) {
                     await LdesRepository.updateFeedbackInOrganizationGraph(feedbackUri, lpdcFeedbackOrganizationGraph);
                 } else {
-                    await LdesService.createNewFeedbackFromSnapshot(snapshotUri, feedbackUri)
+                    await LdesService.createNewFeedbackFromSnapshot(feedbackUri)
                 }
-                await LdesRepository.markSnapshotAsProcessed(snapshotUri);
-                console.log(`✓ Successfully processed snapshot: ${snapshotUri}`);
+                console.log(`✓ Successfully processed snapshot: ${feedbackUri}`);
             } catch (error) {
-                console.error(`✗ Error processing snapshot ${snapshotUri}:`, error);
+                console.error(`✗ Error processing snapshot ${feedbackUri}:`, error);
             }
         }
 
-        console.log(`Completed processing ${snapshotUris.length} snapshots.`);
+        console.log(`Completed processing ${feedbackUris.length} snapshots.`);
     };
 
 
     /**
      * Create a new feedback object in lpdc data based on the ldes snapshot.
      */
-    static createNewFeedbackFromSnapshot = async function (snapshotUri, feedbackUri) {
-        const recipientConcept = await LdesService.ensureOrganizationConcepts(snapshotUri);
-        const bestuurseenheid = await LdesService.findOrganizationGraph(recipientConcept);
+    static createNewFeedbackFromSnapshot = async function (feedbackUri) {
+        const recipientConcept = await LdesService.ensureOrganizationConcepts(feedbackUri);
+        const bestuurseenheid = await LdesService.findOrganizationGraph(recipientConcept, feedbackUri);
         await LdesRepository.copyFeedbackToOrganizationGraph(feedbackUri, bestuurseenheid.uri, bestuurseenheid.graph);
+        await LdesRepository.removeFeedbackFromUnknownGraph(feedbackUri);
     };
 
     /**
@@ -50,8 +48,8 @@ class LdesService {
      * - Extract question sender/recipient URIs from snapshot
      * - Check for ovo concepts that they exist, create if missing
      */
-    static ensureOrganizationConcepts = async function (snapshotUri) {
-        const organizationUris = await LdesRepository.extractOrganizationUris(snapshotUri);
+    static ensureOrganizationConcepts = async function (feedbackUri) {
+        const organizationUris = await LdesRepository.extractOrganizationUris(feedbackUri);
 
         let recipientConcept
         if (isOvoUri(organizationUris.recipient)) {
@@ -112,7 +110,7 @@ class LdesService {
      * - Find bestuurseenheid
      * - Get organization graph
      */
-    static findOrganizationGraph = async function (recipientConcept) {
+    static findOrganizationGraph = async function (recipientConcept, feedbackUri) {
         let bestuurseenheid;
         if (isOvoUri(recipientConcept.uri)) {
             bestuurseenheid = await OrganizationRepository.findBestuurseenheidByOvoCode(recipientConcept.notation);
@@ -121,8 +119,8 @@ class LdesService {
         }
 
         if (!bestuurseenheid) {
-            // OVO code geen link naar bestaandebestuurseenheid -> discarden + extra status unkown recipient
-            throw `  ✗ No bestuurseenheid found for: ${recipientConcept}`
+            await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
+            throw `  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `
         }
 
         if (DEBUG) {

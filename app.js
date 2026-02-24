@@ -16,7 +16,7 @@ import {
     LPDC_STATUS_START_URI,
     LPDC_STATUS_END_URI,
     INGEST_CRON,
-    LDES_GRAPH
+    LDES_GRAPH, UNKNOWN_GRAPH
 } from './env.js';
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
@@ -34,8 +34,49 @@ if (DEBUG) {
     console.log(`LPDC_STATUS_END_URI: ${LPDC_STATUS_END_URI}`);
     console.log(`LPDC_STATUS_PREDICATE: ${LPDC_STATUS_PREDICATE}`);
     console.log(`LDES_GRAPH: ${LDES_GRAPH}`);
+    console.log(`UNKNOWN_GRAPH: ${UNKNOWN_GRAPH}`);
+
 }
 app.use(bodyParser.json());
+
+/**
+ * Handles ldes ingesting:
+ */
+async function handleLdesIngest() {
+    try {
+        let feedbackUris = await LdesRepository.findToProcessSnapshots()
+
+        console.log(`Found ${feedbackUris.length} snapshots to process`);
+
+        if (feedbackUris.length) {
+            LdesService.process(feedbackUris)
+                .catch(e => {
+                    console.log(`Something went wrong while processing snapshots`);
+                    console.error(e);
+                });
+        }
+
+        console.log('Started ldes ingest');
+    } catch (error) {
+        console.error('Error ldes ingesting:', error);
+        throw error;
+    }
+}
+
+/**
+ * cronjob for handling feedback ldes ingesting
+ */
+new CronJob(
+    INGEST_CRON,
+    async function () {
+        console.log(
+            `Handling feedback ldes ingesting at ${new Date().toISOString()}`,
+        );
+        await handleLdesIngest();
+    },
+    null,
+    true,
+);
 
 /**
  * Handle missed deltas by fixing inconsistent data states.
@@ -97,46 +138,6 @@ new CronJob(
             `Missed delta's healing triggered by cron job at ${new Date().toISOString()}`,
         );
         await handleMissedDeltas();
-    },
-    null,
-    true,
-);
-
-/**
- * Handles ldes ingesting:
- */
-async function handleLdesIngest() {
-    try {
-        let snapshotsURIs = await LdesRepository.findToProcessSnapshots()
-
-        console.log(`Found ${snapshotsURIs.length} snapshots to process`);
-        console.log(snapshotsURIs);
-
-        if (snapshotsURIs.length) {
-            LdesService.process(snapshotsURIs)
-                .catch(e => {
-                    console.log(`Something went wrong while processing snapshots`);
-                    console.error(e);
-                });
-        }
-
-        console.log('Started ldes ingest');
-    } catch (error) {
-        console.error('Error ldes ingesting:', error);
-        throw error;
-    }
-}
-
-/**
- * cronjob for handling feedback ldes ingesting
- */
-new CronJob(
-    INGEST_CRON,
-    async function () {
-        console.log(
-            `Handling feedback ldes ingesting at ${new Date().toISOString()}`,
-        );
-        await handleLdesIngest();
     },
     null,
     true,
