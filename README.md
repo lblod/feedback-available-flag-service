@@ -8,13 +8,11 @@ environment variables to be used in other applications that use the same feedbac
 ## How It Works
 
 1. The service listens for delta notifications from [delta-notifier](https://github.com/mu-semtech/delta-notifier)
-2. When a feedbacks's ipdc-status changes to the configured 'start' ipdc-status, it gets the instance linked to the
+2. When a feedback's ipdc-status changes to the configured 'start' ipdc-status, it gets the instance linked to the
    feedback.
 3. The service updates the `lpdcExt:feedbackAvailable` flag on the instance resource and sets the configured 'start'
    status on the feedback.
-4. When a feedback's status is changed to the configured 'end' status, it unflags the instance if there are no other
-   linked feedbacks in the 'start'
-   ipdc-status.
+4. When a feedback's status is changed to the configured 'end' status, it unflags the instance if there are no other linked feedback in the 'start' ipdc-status.
 
 There is also a cronjob that runs daily to make sure missed deltas are handled.
 
