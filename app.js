@@ -158,13 +158,16 @@ app.post('/delta', (req, res) => {
     let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
         LPDC_STATUS_PREDICATE, LPDC_STATUS_END_URI);
 
+    let newSnapshotInsertURIs = new Delta(req.body).getInsertsForLdes();
+
     if (DEBUG) {
         console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
         console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
+        console.log(`Extracted ${newSnapshotInsertURIs.length} new snapshot URIs:`, newSnapshotInsertURIs);
     }
 
-    if (!newFeedbackInsertURIs.length && !processedFeedbackInsertURIs.length) {
-        console.log('Delta did not contain any feedback status changes, awaiting the next batch!');
+    if (!newFeedbackInsertURIs.length && !processedFeedbackInsertURIs.length && !newSnapshotInsertURIs) {
+        console.log('Delta did not contain any feedback changes, awaiting the next batch!');
         return res.status(204).send();
     }
 
@@ -179,7 +182,15 @@ app.post('/delta', (req, res) => {
     if (processedFeedbackInsertURIs.length) {
         DeltaService.process(processedFeedbackInsertURIs, false)
             .catch(e => {
-                console.log(`Something went wrong while processing processed feedback delta`);
+                console.log(`Something went wrong while processing processed feedback deltas`);
+                console.error(e);
+            });
+    }
+
+    if (newSnapshotInsertURIs.length) {
+        LdesService.process(newSnapshotInsertURIs)
+            .catch(e => {
+                console.log(`Something went wrong while processing new snapshot deltas`);
                 console.error(e);
             });
     }

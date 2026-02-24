@@ -17,7 +17,7 @@ environment variables to be used in other applications that use the same feedbac
 There is also a cronjob that runs daily to make sure missed deltas are handled.
 
 Besides the above, the microservice also handles ingesting feedback ldes data from ipdc + enriching this data. It does
-this via a cronjob that
+this via a cronjob + delta's that
 moves incoming feedback snapshots to it's correct organization graph with some added enrichments.
 
 ## Installation
