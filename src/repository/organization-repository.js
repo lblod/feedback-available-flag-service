@@ -1,6 +1,6 @@
 import {sparqlEscapeUri, sparqlEscapeString, uuid} from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
-import {extractOrganizationCode, getOrganizationGraphFromUuid} from "../utils/uri-utils";
+import {extractFinalPartUri, getOrganizationGraphFromUuid} from "../utils/uri-utils";
 import {DEBUG} from "../../env";
 
 const PUBLIC_GRAPH = 'http://mu.semte.ch/graphs/public';
@@ -165,7 +165,7 @@ class OrganizationRepository {
      *
      */
     static fetchFromDataVlaanderen = async function (organizationUri) {
-        const ovoCode = extractOrganizationCode(organizationUri);
+        const ovoCode = extractFinalPartUri(organizationUri);
         try {
             const apiUrl = `https://api.wegwijs.vlaanderen.be/v1/search/organisations?q=ovoNumber:${ovoCode}`;
             const response = await fetch(apiUrl);

@@ -1,6 +1,6 @@
-import {sparqlEscapeUri} from 'mu';
+import {sparqlEscapeUri, sparqlEscapeString, uuid} from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
-import {transformIpdcToLpdcUri} from "../utils/uri-utils";
+import {extractFinalPartUri, transformIpdcToLpdcUri} from "../utils/uri-utils";
 import {DEBUG, LDES_GRAPH, UNKNOWN_GRAPH} from "../../env";
 
 class LdesRepository {
@@ -133,17 +133,26 @@ class LdesRepository {
             throw 'feedback has no instance linked to it.';
         }
 
+        const feedbackUuid = extractFinalPartUri(feedbackUri);
+        const answerUuid = uuid();
+        const questionUuid = uuid();
+
+
         await update(`
           PREFIX schema: <https://schema.org/>
           PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
           PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-                    
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
+
           INSERT {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
               ${sparqlEscapeUri(feedbackUri)} ?p ?o .
               ?o ?pp ?nested .
               ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedUri)} .
               ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
+              ${sparqlEscapeUri(feedbackUri)} mu:uuid ${sparqlEscapeString(feedbackUuid)} .
+              ?question mu:uuid ${sparqlEscapeString(questionUuid)} .
+              ?answer mu:uuid ${sparqlEscapeString(answerUuid)} .
           }
           }
           WHERE {
@@ -151,6 +160,16 @@ class LdesRepository {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} ?p ?o .
                       OPTIONAL { ?o ?pp ?nested . }
+                  }
+              }
+              OPTIONAL {
+                  GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                      ${sparqlEscapeUri(feedbackUri)} schema:question ?question .
+                  }
+              }
+              OPTIONAL {
+                  GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                      ${sparqlEscapeUri(feedbackUri)} schema:suggestedAnswer ?answer .
                   }
               }
           }
@@ -245,6 +264,7 @@ class LdesRepository {
             PREFIX schema: <https://schema.org/>
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+            PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 
             DELETE {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
@@ -262,8 +282,10 @@ class LdesRepository {
                 {
                     GRAPH ${sparqlEscapeUri(targetGraph)} {
                         ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid))
-                        OPTIONAL { ?o ?pp ?nested . }
+                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid, mu:uuid))
+                        OPTIONAL { ?o ?pp ?nested .
+                                   FILTER (?pp NOT IN (mu:uuid))
+                         }
                     }
                 }
                 {

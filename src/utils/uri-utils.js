@@ -1,7 +1,7 @@
 /**
- * Extracts the ovo code from a Vlaanderen organization URI
+ * Extracts the final part of a given uri. Can be used to get ovo or uuid.
  */
-export function extractOrganizationCode(uri) {
+export function extractFinalPartUri(uri) {
     if (!uri || typeof uri !== 'string') {
         throw 'URI must be a non-empty string';
     }
@@ -10,7 +10,7 @@ export function extractOrganizationCode(uri) {
     const code = segments[segments.length - 1];
 
     if (!code) {
-        throw 'Could not extract organization code from URI';
+        throw 'Could not extract from URI';
     }
 
     return code;
