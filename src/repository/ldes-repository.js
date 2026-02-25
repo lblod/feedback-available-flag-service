@@ -137,6 +137,8 @@ class LdesRepository {
         const answerUuid = uuid();
         const questionUuid = uuid();
 
+        const questionUri = `https://ipdc.vlaanderen.be/publicatie/id/question/${questionUuid}`;
+        const answerUri = `https://ipdc.vlaanderen.be/publicatie/id/answer/${answerUuid}`;
 
         await update(`
           PREFIX schema: <https://schema.org/>
@@ -146,30 +148,39 @@ class LdesRepository {
 
           INSERT {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
-              ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-              ?o ?pp ?nested .
+              ${sparqlEscapeUri(feedbackUri)} ?p ?oReplaced .
+
               ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedUri)} .
               ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
               ${sparqlEscapeUri(feedbackUri)} mu:uuid ${sparqlEscapeString(feedbackUuid)} .
-              ?question mu:uuid ${sparqlEscapeString(questionUuid)} .
-              ?answer mu:uuid ${sparqlEscapeString(answerUuid)} .
+
+              ${sparqlEscapeUri(questionUri)} ?questionPred ?questionObj .
+              ${sparqlEscapeUri(questionUri)} mu:uuid ${sparqlEscapeString(questionUuid)} .
+
+              ${sparqlEscapeUri(answerUri)} ?answerPred ?answerObj .
+              ${sparqlEscapeUri(answerUri)} mu:uuid ${sparqlEscapeString(answerUuid)} .
           }
           }
           WHERE {
               {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                      OPTIONAL { ?o ?pp ?nested . }
+
+                      BIND(IF(?p = schema:question, ${sparqlEscapeUri(questionUri)},
+                           IF(?p = schema:suggestedAnswer, ${sparqlEscapeUri(answerUri)},
+                           ?o)) AS ?oReplaced)
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                      ${sparqlEscapeUri(feedbackUri)} schema:question ?question .
+                      ${sparqlEscapeUri(feedbackUri)} schema:question ?questionBlank .
+                      ?questionBlank ?questionPred ?questionObj .
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                      ${sparqlEscapeUri(feedbackUri)} schema:suggestedAnswer ?answer .
+                      ${sparqlEscapeUri(feedbackUri)} schema:suggestedAnswer ?answerBlank .
+                      ?answerBlank ?answerPred ?answerObj .
                   }
               }
           }
@@ -269,29 +280,23 @@ class LdesRepository {
             DELETE {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
                     ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                    ?o ?pp ?nested .
                 }
             }
             INSERT {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
                     ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
-                    ?oNew ?ppNew ?nestedNew .
                 }
             }
             WHERE {
                 {
                     GRAPH ${sparqlEscapeUri(targetGraph)} {
                         ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid, mu:uuid))
-                        OPTIONAL { ?o ?pp ?nested .
-                                   FILTER (?pp NOT IN (mu:uuid))
-                         }
+                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid, mu:uuid, schema:suggestedAnswer, schema:question))
                     }
                 }
                 {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
-                        OPTIONAL { ?oNew ?ppNew ?nestedNew . }
                     }
                 }
             }
