@@ -66,31 +66,34 @@ class InstanceRepository {
     };
 
     /**
-     * Set the ldpc-status of given feedbackUri to starting.
-     *
+     * Set the ldpc-status of given feedbackUri based on its ipdc-status.
+     * Sets to LPDC_STATUS_START_URI if ipdc-status is IPDC_STATUS_START_URI,
+     * otherwise sets to LPDC_STATUS_END_URI.
+     * Only sets if no lpdc-status already exists.
      */
     static setLpdcStatus = async function (feedbackUri) {
         if (!feedbackUri)
             throw 'feedbackUri can not be null.';
 
         await update(`
-      DELETE {
-        GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue .
-        }
-      }
       INSERT {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_START_URI)}  .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?lpdcStatusToSet  .
         }
       }
       WHERE {
         GRAPH ?g {
         ${sparqlEscapeUri(feedbackUri)} a ${sparqlEscapeUri("https://schema.org/Conversation")}.
+        ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?ipdcStatus.
         OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue . }
+
+        BIND(IF(?ipdcStatus = ${sparqlEscapeUri(IPDC_STATUS_START_URI)},
+                ${sparqlEscapeUri(LPDC_STATUS_START_URI)},
+                ${sparqlEscapeUri(LPDC_STATUS_END_URI)}) AS ?lpdcStatusToSet)
         }
 
         FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)} && ?g != ${sparqlEscapeUri(UNKNOWN_GRAPH)})
+        FILTER(!BOUND(?oldValue))
       }
     `);
     };
@@ -170,7 +173,7 @@ class InstanceRepository {
     };
 
     /**
-     * Find all feedbacks that have ipdc-status AANGEMAAKT but are missing lpdc-status.
+     * Find all feedbacks that have any ipdc-status but are missing lpdc-status.
      * These feedbacks should have their lpdc-status set to OPEN.
      */
     static findFeedbacksMissingLpdcStatus = async function () {
@@ -180,15 +183,15 @@ class InstanceRepository {
       SELECT ?feedback WHERE {
         GRAPH ?g {
             ?feedback a schema2:Conversation.
-            ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
+            ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?ipdcStatus.
         }
-        
+
         FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)})
-        
+
         FILTER NOT EXISTS {
           GRAPH ?g{
             ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?processingStatus.
-          }  
+          }
         }
       }
     `);

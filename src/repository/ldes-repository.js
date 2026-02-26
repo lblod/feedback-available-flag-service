@@ -14,11 +14,15 @@ class LdesRepository {
         const result = await query(`
             PREFIX schema: <https://schema.org/>
             PREFIX prov:   <https://www.w3.org/ns/prov#>
-            
+
             SELECT ?snapshotUri WHERE {
                 GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                      ?snapshotUri a schema:Conversation .
                      ?snapshotUri prov:generatedAtTime ?generatedAtTime .
+
+                     BIND(IF(isLiteral(?generatedAtTime) && STRSTARTS(str(datatype(?generatedAtTime)), "https://www.w3.org/"),
+                             STRDT(str(?generatedAtTime), IRI(REPLACE(str(datatype(?generatedAtTime)), "^https://", "http://"))),
+                             ?generatedAtTime) AS ?generatedAtTimeConverted)
                 }
                 FILTER NOT EXISTS {
                 GRAPH ?g {
@@ -26,7 +30,7 @@ class LdesRepository {
                     }
                 FILTER(
                     ?g != ${sparqlEscapeUri(LDES_GRAPH)} &&
-                    ?generatedAtTime2 = ?generatedAtTime)
+                    ?generatedAtTime2 = ?generatedAtTimeConverted)
                 }
             } ORDER BY ?generatedAtTime
         `);
@@ -148,16 +152,16 @@ class LdesRepository {
 
           INSERT {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
-              ${sparqlEscapeUri(feedbackUri)} ?p ?oReplaced .
+              ${sparqlEscapeUri(feedbackUri)} ?p ?oReplacedFinal .
 
               ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedUri)} .
               ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
               ${sparqlEscapeUri(feedbackUri)} mu:uuid ${sparqlEscapeString(feedbackUuid)} .
 
-              ${sparqlEscapeUri(questionUri)} ?questionPred ?questionObj .
+              ${sparqlEscapeUri(questionUri)} ?questionPred ?questionObjFixed .
               ${sparqlEscapeUri(questionUri)} mu:uuid ${sparqlEscapeString(questionUuid)} .
 
-              ${sparqlEscapeUri(answerUri)} ?answerPred ?answerObj .
+              ${sparqlEscapeUri(answerUri)} ?answerPred ?answerObjFixed .
               ${sparqlEscapeUri(answerUri)} mu:uuid ${sparqlEscapeString(answerUuid)} .
           }
           }
@@ -169,18 +173,30 @@ class LdesRepository {
                       BIND(IF(?p = schema:question, ${sparqlEscapeUri(questionUri)},
                            IF(?p = schema:suggestedAnswer, ${sparqlEscapeUri(answerUri)},
                            ?o)) AS ?oReplaced)
+
+                      BIND(IF(isLiteral(?oReplaced) && STRSTARTS(str(datatype(?oReplaced)), "https://www.w3.org/"),
+                              STRDT(str(?oReplaced), IRI(REPLACE(str(datatype(?oReplaced)), "^https://", "http://"))),
+                              ?oReplaced) AS ?oReplacedFinal)
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} schema:question ?questionBlank .
                       ?questionBlank ?questionPred ?questionObj .
+
+                      BIND(IF(isLiteral(?questionObj) && STRSTARTS(str(datatype(?questionObj)), "https://www.w3.org/"),
+                              STRDT(str(?questionObj), IRI(REPLACE(str(datatype(?questionObj)), "^https://", "http://"))),
+                              ?questionObj) AS ?questionObjFixed)
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} schema:suggestedAnswer ?answerBlank .
                       ?answerBlank ?answerPred ?answerObj .
+
+                      BIND(IF(isLiteral(?answerObj) && STRSTARTS(str(datatype(?answerObj)), "https://www.w3.org/"),
+                              STRDT(str(?answerObj), IRI(REPLACE(str(datatype(?answerObj)), "^https://", "http://"))),
+                              ?answerObj) AS ?answerObjFixed)
                   }
               }
           }
@@ -213,7 +229,7 @@ class LdesRepository {
           INSERT {
               GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
                   ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
-                  ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
+                  ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTimeConverted .
               }
           }
           WHERE {
@@ -221,6 +237,10 @@ class LdesRepository {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
                       ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
+
+                      BIND(IF(isLiteral(?generatedAtTime) && STRSTARTS(str(datatype(?generatedAtTime)), "https://www.w3.org/"),
+                              STRDT(str(?generatedAtTime), IRI(REPLACE(str(datatype(?generatedAtTime)), "^https://", "http://"))),
+                              ?generatedAtTime) AS ?generatedAtTimeConverted)
                   }
               }
               OPTIONAL {
@@ -284,7 +304,7 @@ class LdesRepository {
             }
             INSERT {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
-                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
+                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNewFixed .
                 }
             }
             WHERE {
@@ -297,6 +317,10 @@ class LdesRepository {
                 {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
+
+                        BIND(IF(isLiteral(?oNew) && STRSTARTS(str(datatype(?oNew)), "https://www.w3.org/"),
+                                STRDT(str(?oNew), IRI(REPLACE(str(datatype(?oNew)), "^https://", "http://"))),
+                                ?oNew) AS ?oNewFixed)
                     }
                 }
             }

@@ -146,28 +146,53 @@ new CronJob(
 /**
  * Delta endpoint
  */
-app.post('/delta', (req, res) => {
+app.post('/delta-ingest', (req, res) => {
     if (DEBUG) {
-        console.log('--- Delta received ---');
+        console.log('--- Delta ingest received ---');
+        console.log('Delta body:', JSON.stringify(req.body, null, 2));
+    }
+
+    let newSnapshotInsertURIs = new Delta(req.body).getInsertsForLdes();
+
+    if (DEBUG) {
+        console.log(`Extracted ${newSnapshotInsertURIs.length} new snapshot URIs:`, newSnapshotInsertURIs);
+    }
+
+    if (!newSnapshotInsertURIs) {
+        console.log('Delta did not contain any new snapshots in the ldes graph, awaiting the next batch!');
+        return res.status(204).send();
+    }
+
+    if (newSnapshotInsertURIs.length) {
+        LdesService.process(newSnapshotInsertURIs)
+            .catch(e => {
+                console.log(`Something went wrong while processing new snapshot deltas`);
+                console.error(e);
+            });
+    }
+
+    console.log('Started processing delta ingest, awaiting the next batch!');
+    return res.status(204).send().end();
+});
+
+/**
+ * Delta endpoint
+ */
+app.post('/delta-status-start', (req, res) => {
+    if (DEBUG) {
+        console.log('--- Delta status start received ---');
         console.log('Delta body:', JSON.stringify(req.body, null, 2));
     }
 
     let newFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
         IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI);
 
-    let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
-        LPDC_STATUS_PREDICATE, LPDC_STATUS_END_URI);
-
-    let newSnapshotInsertURIs = new Delta(req.body).getInsertsForLdes();
-
     if (DEBUG) {
         console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
-        console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
-        console.log(`Extracted ${newSnapshotInsertURIs.length} new snapshot URIs:`, newSnapshotInsertURIs);
     }
 
-    if (!newFeedbackInsertURIs.length && !processedFeedbackInsertURIs.length && !newSnapshotInsertURIs) {
-        console.log('Delta did not contain any feedback changes, awaiting the next batch!');
+    if (!newFeedbackInsertURIs.length) {
+        console.log('Delta did not contain any new feedback in start status, awaiting the next batch!');
         return res.status(204).send();
     }
 
@@ -179,6 +204,31 @@ app.post('/delta', (req, res) => {
             });
     }
 
+    console.log('Started processing status start delta, awaiting the next batch!');
+    return res.status(204).send().end();
+});
+
+/**
+ * Delta endpoint
+ */
+app.post('/delta-status-end', (req, res) => {
+    if (DEBUG) {
+        console.log('--- Delta status end received ---');
+        console.log('Delta body:', JSON.stringify(req.body, null, 2));
+    }
+
+    let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
+        LPDC_STATUS_PREDICATE, LPDC_STATUS_END_URI);
+
+    if (DEBUG) {
+        console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
+    }
+
+    if (!processedFeedbackInsertURIs.length) {
+        console.log('Delta did not contain any processed feedback, awaiting the next batch!');
+        return res.status(204).send();
+    }
+
     if (processedFeedbackInsertURIs.length) {
         DeltaService.process(processedFeedbackInsertURIs, false)
             .catch(e => {
@@ -187,15 +237,7 @@ app.post('/delta', (req, res) => {
             });
     }
 
-    if (newSnapshotInsertURIs.length) {
-        LdesService.process(newSnapshotInsertURIs)
-            .catch(e => {
-                console.log(`Something went wrong while processing new snapshot deltas`);
-                console.error(e);
-            });
-    }
-
-    console.log('Started processing delta, awaiting the next batch!');
+    console.log('Started processing status end delta, awaiting the next batch!');
     return res.status(204).send().end();
 });
 
