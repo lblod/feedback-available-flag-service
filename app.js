@@ -1,25 +1,31 @@
-import {app} from 'mu';
+import {app, errorHandler} from 'mu';
 import Delta from "./src/model/delta.js";
 import DeltaService from "./src/service/delta-service.js";
 import InstanceRepository from "./src/repository/instance-repository.js";
+import PublishRepository from "./src/repository/publish-repository";
+import publishRepository from "./src/repository/publish-repository";
 
 import {CronJob} from 'cron';
 import bodyParser from 'body-parser';
 import {
-    DEBUG,
+    DEBUG, ERROR_EXPIRATION_MONTHS,
     HEALING_CRON,
+    INGEST_CRON,
     INSTANCE_PREDICATE,
-    INSTANCE_TYPE,
+    INSTANCE_TYPE, IPDC_JSON_ENDPOINT,
     IPDC_STATUS_PREDICATE,
-    IPDC_STATUS_START_URI,
+    IPDC_STATUS_START_URI, IPDC_X_API_KEY,
+    LDES_GRAPH,
+    LPDC_STATUS_END_URI,
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_START_URI,
-    LPDC_STATUS_END_URI,
-    INGEST_CRON,
-    LDES_GRAPH, UNKNOWN_GRAPH
+    PUBLISH_CRON,
+    RETRY_COUNTER_LIMIT,
+    UNKNOWN_GRAPH
 } from './env.js';
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
+import {isOvoUri} from "./src/utils/uri-utils";
 
 console.log('lpdc feedback management service starting...');
 if (DEBUG) {
@@ -35,9 +41,58 @@ if (DEBUG) {
     console.log(`LPDC_STATUS_PREDICATE: ${LPDC_STATUS_PREDICATE}`);
     console.log(`LDES_GRAPH: ${LDES_GRAPH}`);
     console.log(`UNKNOWN_GRAPH: ${UNKNOWN_GRAPH}`);
-
+    console.log(`PUBLISH_CRON: ${PUBLISH_CRON}`);
+    console.log(`RETRY_COUNTER_LIMIT: ${RETRY_COUNTER_LIMIT}`);
+    console.log(`ERROR_EXPIRATION_MONTHS: ${ERROR_EXPIRATION_MONTHS}`);
+    console.log(`IPDC_JSON_ENDPOINT: ${IPDC_JSON_ENDPOINT}`);
+    console.log(`IPDC_X_API_KEY: ${IPDC_X_API_KEY}`);
 }
+
 app.use(bodyParser.json());
+app.use(errorHandler);
+
+let inProgress = false;
+
+new CronJob(PUBLISH_CRON, async () => {
+    if (inProgress) {
+        console.log('Publish process already in progress');
+        return;
+    }
+    try {
+        console.log('Publish process start');
+        inProgress = true;
+        const feedbackToPublish = await PublishRepository.getFeedbackToPublish();
+        console.log(`Found ${feedbackToPublish.length} to publish`);
+        console.log(feedbackToPublish)
+        await PublishRepository.clearPublicationErrors();
+
+        for (const feedback of feedbackToPublish) {
+            try {
+                if(!isOvoUri(feedback.payload.antwoord.van)){
+                    feedback.payload.antwoord.van = await publishRepository.findOvoCodeByBestuurseenheid(feedback.payload.antwoord.van);
+                }
+                await PublishRepository.sendFeedbackToIpdc(feedback.payload);
+                await PublishRepository.updateFeedbackOnSucces(feedback.payload.feedbackId);
+                console.log(`Successfully published feedback ${feedback.payload.feedbackId} to ipdc`);
+            } catch (e) {
+                await PublishRepository.incrementRetryCounter(feedback.payload.feedbackId);
+                const retriesLeft = RETRY_COUNTER_LIMIT - (feedback.retryCount ?? 0) - 1;
+                console.error(
+                    `Could not publish ${feedback.payload.feedbackId}, ${retriesLeft} ${retriesLeft === 1 ? "retry" : "retries"} left${
+                        retriesLeft === 0 ? ", giving up" : ""
+                    }. Error: `,
+                    e
+                );
+            }
+        }
+    } catch (e) {
+        console.error('General error fetching data, retrying later');
+        console.log(e);
+    } finally {
+        inProgress = false;
+    }
+}, null, true);
+
 
 /**
  * Handles ldes ingesting:
