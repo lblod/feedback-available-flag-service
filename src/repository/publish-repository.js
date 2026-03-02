@@ -9,9 +9,7 @@ import {
     LPDC_STATUS_END_URI,
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_PUBLISHED_URI, RETRY_COUNTER_LIMIT
-} from "../../env";
-import publishRepository from "./publish-repository";
-
+} from "../../env.js";
 
 class PublishRepository {
 
@@ -102,9 +100,9 @@ class PublishRepository {
         });
 
         if (!response.ok) {
-            const responseBody = await publishRepository.getResponseBody(response);
+            const responseBody = await PublishRepository.getResponseBody(response);
             try {
-                await publishRepository.createPublicationError(response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData));
+                await PublishRepository.createPublicationError(response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData));
             } catch (e) {
                 console.log('Could not save publicationError', e);
             }
@@ -214,7 +212,7 @@ class PublishRepository {
       `);
     }
 
-    static findOvoCodeByBestuurseenheid = async function (bestuurseenheidUri) {
+    static findOvoUriFromBestuurseenheidViaOvoCode = async function (bestuurseenheidUri) {
         if (!bestuurseenheidUri)
             throw new Error('bestuurseenheid URI cannot be null.');
 
@@ -235,10 +233,40 @@ class PublishRepository {
       `);
 
         if (result.results.bindings.length === 0) {
-            throw `x Can not find ovo code for ${bestuurseenheidUri}`
+            throw new Error(`x Can not find ovo code for ${bestuurseenheidUri}`)
         }
 
         return "https://data.vlaanderen.be/id/organisatie/" + result.results.bindings[0].ovoCode.value;
+    };
+
+    static findOvoConceptFromBestuurseenheid = async function (bestuurseenheidUri) {
+        if (!bestuurseenheidUri)
+            throw new Error('bestuurseenheid URI cannot be null.');
+
+        const result = await query(`
+          PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+          PREFIX besluit: <http://data.vlaanderen.be/ns/besluit#>
+          PREFIX adms: <http://www.w3.org/ns/adms#>
+          PREFIX generiek: <https://data.vlaanderen.be/ns/generiek#>
+
+          SELECT ?ovoConcept WHERE {
+              ${sparqlEscapeUri(bestuurseenheidUri)} a besluit:Bestuurseenheid .
+              ${sparqlEscapeUri(bestuurseenheidUri)} adms:identifier ?s .
+              ?s skos:notation "OVO-nummer".
+              ?s generiek:gestructureerdeIdentificator ?strucID .
+              ?strucID generiek:lokaleIdentificator ?ovoCode .
+              
+              ?ovoConcept a skos:Concept.
+              ?ovoConcept skos:notation ?ovoCode.
+          }
+          LIMIT 1
+      `);
+
+        if (result.results.bindings.length === 0) {
+            throw new Error(`x Can not find ovo concept for ovoCode of ${bestuurseenheidUri}`);
+        }
+
+        return result.results.bindings[0].ovoConcept.value;
     };
 
 }

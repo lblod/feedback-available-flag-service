@@ -64,13 +64,13 @@ class LdesRepository {
         `);
 
         if (result.results.bindings.length === 0) {
-            throw `No organization URIs found in snapshot ${snapshotUri}`;
+            throw new Error(`No organization URIs found in snapshot ${snapshotUri}`);
         }
 
         const binding = result.results.bindings[0];
 
         if (!binding.recipientUri) {
-            throw `No recipient URI found in snapshot ${snapshotUri} - cannot determine organization graph`;
+            throw new Error(`No recipient URI found in snapshot ${snapshotUri} - cannot determine organization graph`);
         }
 
         return {

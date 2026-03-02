@@ -2,8 +2,7 @@ import {app, errorHandler} from 'mu';
 import Delta from "./src/model/delta.js";
 import DeltaService from "./src/service/delta-service.js";
 import InstanceRepository from "./src/repository/instance-repository.js";
-import PublishRepository from "./src/repository/publish-repository";
-import publishRepository from "./src/repository/publish-repository";
+import PublishRepository from "./src/repository/publish-repository.js";
 
 import {CronJob} from 'cron';
 import bodyParser from 'body-parser';
@@ -25,7 +24,7 @@ import {
 } from './env.js';
 import LdesRepository from "./src/repository/ldes-repository.js";
 import LdesService from "./src/service/ldes-service.js";
-import {isOvoUri} from "./src/utils/uri-utils";
+import {isOvoUri} from "./src/utils/uri-utils.js";
 
 console.log('lpdc feedback management service starting...');
 if (DEBUG) {
@@ -51,16 +50,14 @@ if (DEBUG) {
 app.use(bodyParser.json());
 app.use(errorHandler);
 
-let inProgress = false;
+let publishInProgress = false;
 
-new CronJob(PUBLISH_CRON, async () => {
-    if (inProgress) {
-        console.log('Publish process already in progress');
-        return;
-    }
+/**
+ * Handles publishing feedback to IPDC:
+ */
+async function handlePublish() {
     try {
         console.log('Publish process start');
-        inProgress = true;
         const feedbackToPublish = await PublishRepository.getFeedbackToPublish();
         console.log(`Found ${feedbackToPublish.length} to publish`);
         await PublishRepository.clearPublicationErrors();
@@ -68,7 +65,7 @@ new CronJob(PUBLISH_CRON, async () => {
         for (const feedback of feedbackToPublish) {
             try {
                 if(!isOvoUri(feedback.payload.antwoord.van)){
-                    feedback.payload.antwoord.van = await publishRepository.findOvoCodeByBestuurseenheid(feedback.payload.antwoord.van);
+                    feedback.payload.antwoord.van = await PublishRepository.findOvoConceptFromBestuurseenheid(feedback.payload.antwoord.van);
                 }
                 await PublishRepository.sendFeedbackToIpdc(feedback.payload);
                 await PublishRepository.updateFeedbackOnSucces(feedback.payload.feedbackId);
@@ -87,10 +84,29 @@ new CronJob(PUBLISH_CRON, async () => {
     } catch (e) {
         console.error('General error fetching data, retrying later');
         console.log(e);
-    } finally {
-        inProgress = false;
     }
-}, null, true);
+}
+
+/**
+ * cronjob for handling feedback publishing to IPDC
+ */
+new CronJob(
+    PUBLISH_CRON,
+    async function () {
+        if (publishInProgress) {
+            console.log('Publish process already in progress');
+            return;
+        }
+        try {
+            publishInProgress = true;
+            await handlePublish();
+        } finally {
+            publishInProgress = false;
+        }
+    },
+    null,
+    true,
+);
 
 
 /**

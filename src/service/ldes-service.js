@@ -1,7 +1,8 @@
 import LdesRepository from '../repository/ldes-repository.js';
 import OrganizationRepository from '../repository/organization-repository.js';
-import {isOvoUri} from "../utils/uri-utils";
-import {DEBUG} from "../../env";
+import {isOvoUri} from "../utils/uri-utils.js";
+import {DEBUG} from "../../env.js";
+import PublishRepository from "../repository/publish-repository.js";
 
 class LdesService {
 
@@ -58,6 +59,8 @@ class LdesService {
                 console.log(`  ✓ Recipient concept: ${recipientConcept.label} (OVO: ${recipientConcept.notation})`);
             }
         } else {
+            const ovoUri = await PublishRepository.findOvoUriFromBestuurseenheidViaOvoCode(organizationUris.recipient)
+            await LdesService.ensureOvoConceptExists(ovoUri);
             recipientConcept = {
                 uri: organizationUris.recipient,
                 label: null,
@@ -120,7 +123,7 @@ class LdesService {
 
         if (!bestuurseenheid) {
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `);
         }
 
         if (DEBUG) {

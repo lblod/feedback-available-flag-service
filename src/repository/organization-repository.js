@@ -170,13 +170,13 @@ class OrganizationRepository {
             const apiUrl = `https://api.wegwijs.vlaanderen.be/v1/search/organisations?q=ovoNumber:${ovoCode}`;
             const response = await fetch(apiUrl);
             if (!response.ok) {
-                throw `Failed to fetch from Wegwijs API: ${response.status} ${response.statusText}`;
+                throw new Error(`Failed to fetch from Wegwijs API: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
 
             if (!data || !Array.isArray(data) || data.length === 0) {
-                throw `No organization found for OVO code: ${ovoCode}`;
+                throw new Error(`No organization found for OVO code: ${ovoCode}`);
             }
 
             return {

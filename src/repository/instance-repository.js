@@ -29,9 +29,9 @@ class InstanceRepository {
       }
     `);
         if (result.results.bindings.length === 0)
-            throw `URI <${uri}> is not linked to an instance, data corrupt?`;
+            throw new Error(`URI <${uri}> is not linked to an instance, data corrupt?`);
         if (result.results.bindings.length > 1)
-            throw `multiple results exists while doing lookup on URI <${uri}>, data corrupt?`;
+            throw new Error(`multiple results exists while doing lookup on URI <${uri}>, data corrupt?`);
         return result.results.bindings[0].instance.value;
     };
 
