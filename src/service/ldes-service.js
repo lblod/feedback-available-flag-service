@@ -85,7 +85,7 @@ class LdesService {
      */
     static ensureOvoConceptExists = async function (organizationUri) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
 
         let concept = await OrganizationRepository.findConceptByUri(organizationUri);
 

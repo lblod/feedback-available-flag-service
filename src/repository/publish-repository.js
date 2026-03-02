@@ -152,9 +152,11 @@ class PublishRepository {
     }
 
     static async updateFeedbackOnSucces(feedbackUri) {
+        if (!feedbackUri)
+            throw new Error('feedback URI cannot be null.');
+
         const updateFeedbackQuery = `
           PREFIX schema2: <https://schema.org/>
-          PREFIX schema: <http://schema.org/>
           PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           
           DELETE {
@@ -165,7 +167,7 @@ class PublishRepository {
           INSERT {
             GRAPH ?g {
               ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_PUBLISHED_URI)}.
-              ${sparqlEscapeUri(feedbackUri)} schema:datePublished ${sparqlEscapeDateTime(new Date())}.
+              ${sparqlEscapeUri(feedbackUri)} schema2:datePublished ${sparqlEscapeDateTime(new Date())}.
             }
           }
           WHERE {
@@ -180,6 +182,9 @@ class PublishRepository {
     }
 
     static async incrementRetryCounter(feedbackUri) {
+        if (!feedbackUri)
+            throw new Error('feedback URI cannot be null.');
+
         await update(`
             PREFIX schema2: <https://schema.org/>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
@@ -211,7 +216,7 @@ class PublishRepository {
 
     static findOvoCodeByBestuurseenheid = async function (bestuurseenheidUri) {
         if (!bestuurseenheidUri)
-            throw 'bestuurseenheid URI cannot be null.';
+            throw new Error('bestuurseenheid URI cannot be null.');
 
         const result = await query(`
           PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -230,7 +235,7 @@ class PublishRepository {
       `);
 
         if (result.results.bindings.length === 0) {
-            throw `x can not find ovo code for ${bestuurseenheidUri}`
+            throw `x Can not find ovo code for ${bestuurseenheidUri}`
         }
 
         return "https://data.vlaanderen.be/id/organisatie/" + result.results.bindings[0].ovoCode.value;

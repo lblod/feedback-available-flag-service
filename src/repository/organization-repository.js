@@ -13,7 +13,7 @@ class OrganizationRepository {
      */
     static findConceptByUri = async function (organizationUri) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -50,7 +50,7 @@ class OrganizationRepository {
      */
     static findBestuurseenheidByOvoCode = async function (ovoCode) {
         if (!ovoCode)
-            throw 'ovo code cannot be null.';
+            throw new Error('ovo code cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -91,7 +91,7 @@ class OrganizationRepository {
      */
     static findBestuurseenheidByUri = async function (uri) {
         if (!uri)
-            throw 'uri cannot be null.';
+            throw new Error('uri cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -122,11 +122,11 @@ class OrganizationRepository {
      */
     static createConcept = async function (organizationUri, label, notation) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
         if (!label)
-            throw 'label cannot be null.';
+            throw new Error('label cannot be null.');
         if (!notation)
-            throw 'notation cannot be null.';
+            throw new Error('notation cannot be null.');
 
         const conceptUuid = uuid();
 
@@ -195,7 +195,7 @@ class OrganizationRepository {
      */
     static updateOvoConceptWithNotation = async function (organizationUri, concept) {
         if (!organizationUri || !concept.notation || !concept.label)
-            throw 'organizationUri and notation cannot be null.';
+            throw new Error('organizationUri and notation cannot be null.');
         await update(`
                         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 

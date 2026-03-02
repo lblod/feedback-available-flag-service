@@ -63,7 +63,6 @@ new CronJob(PUBLISH_CRON, async () => {
         inProgress = true;
         const feedbackToPublish = await PublishRepository.getFeedbackToPublish();
         console.log(`Found ${feedbackToPublish.length} to publish`);
-        console.log(feedbackToPublish)
         await PublishRepository.clearPublicationErrors();
 
         for (const feedback of feedbackToPublish) {

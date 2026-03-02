@@ -45,7 +45,7 @@ class LdesRepository {
      */
     static extractOrganizationUris = async function (snapshotUri) {
         if (!snapshotUri)
-            throw 'snapshotUri cannot be null.';
+            throw new Error('snapshotUri cannot be null.');
 
         const result = await query(`
             PREFIX schema: <https://schema.org/>
@@ -84,7 +84,7 @@ class LdesRepository {
      */
     static checkIfFeedbackInLpdcData = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         const result = await query(`
             PREFIX schema: <https://schema.org/>
@@ -112,11 +112,11 @@ class LdesRepository {
      */
     static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
         if (!bestuurseenheidUri)
-            throw 'bestuurseenheidUri cannot be null.';
+            throw new Error('bestuurseenheidUri cannot be null.');
         if (!targetGraph)
-            throw 'targetGraph cannot be null.';
+            throw new Error('targetGraph cannot be null.');
 
         const instanceUriResult = await query(`
           PREFIX schema: <https://schema.org/>
@@ -134,7 +134,7 @@ class LdesRepository {
         if (instanceUri) {
             transformedUri = transformIpdcToLpdcUri(instanceUri);
         } else {
-            throw 'feedback has no instance linked to it.';
+            throw new Error('feedback has no instance linked to it.');
         }
 
         const feedbackUuid = extractFinalPartUri(feedbackUri);
@@ -213,7 +213,7 @@ class LdesRepository {
      */
     static addFeedbackToUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         await update(`
           PREFIX schema: <https://schema.org/>
@@ -261,7 +261,7 @@ class LdesRepository {
      */
     static removeFeedbackFromUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         await update(`
           PREFIX schema: <https://schema.org/>
@@ -287,9 +287,9 @@ class LdesRepository {
      */
     static updateFeedbackInOrganizationGraph = async function (feedbackUri, targetGraph) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
         if (!targetGraph)
-            throw 'targetGraph cannot be null.';
+            throw new Error('targetGraph cannot be null.');
 
         await update(`
             PREFIX schema: <https://schema.org/>
