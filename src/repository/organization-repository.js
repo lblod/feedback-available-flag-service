@@ -134,12 +134,20 @@ class OrganizationRepository {
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 
-            INSERT DATA {
+            INSERT {
                 GRAPH ${sparqlEscapeUri(PUBLIC_GRAPH)} {
-                    ${sparqlEscapeUri(organizationUri)} a skos:Concept ;
+                    ?s a skos:Concept ;
                         skos:prefLabel ${sparqlEscapeString(label)} ;
                         skos:notation ${sparqlEscapeString(notation)} ;
                         mu:uuid ${sparqlEscapeString(conceptUuid)} .
+                }
+            }
+            WHERE {
+                VALUES ?s { ${sparqlEscapeUri(organizationUri)} }
+                FILTER NOT EXISTS {
+                    GRAPH ${sparqlEscapeUri(PUBLIC_GRAPH)} {
+                        ?s a skos:Concept .
+                    }
                 }
             }
         `);
