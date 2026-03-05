@@ -44,7 +44,7 @@ class LdesService {
         const transformedInstanceUri = await LdesRepository.getTransformedInstanceUri(feedbackUri);
         if(!transformedInstanceUri){
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ Linked instance doesn't exist in LPDC, added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ Linked instance doesn't exist in LPDC, added ${feedbackUri} to the unknown graph `);
         }
         await LdesRepository.copyFeedbackToOrganizationGraph(feedbackUri, bestuurseenheid.uri, bestuurseenheid.graph, transformedInstanceUri);
         await LdesRepository.removeFeedbackFromUnknownGraph(feedbackUri);
@@ -144,7 +144,7 @@ class LdesService {
         const hasStartStatus = await LdesRepository.isFeedbackInIpdcStartStatus(feedbackUri);
         if(!hasStartStatus){
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ new feedback arrived in different status than expected start status, added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ new feedback arrived in different status than expected start status, added ${feedbackUri} to the unknown graph `);
         }
 
     }

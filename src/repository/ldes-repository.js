@@ -289,7 +289,7 @@ class LdesRepository {
 
             DELETE {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
-                    ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oOld .
                 }
             }
             INSERT {
@@ -299,18 +299,17 @@ class LdesRepository {
             }
             WHERE {
                 {
-                    GRAPH ${sparqlEscapeUri(targetGraph)} {
-                        ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid, mu:uuid, schema:suggestedAnswer, schema:question))
-                    }
-                }
-                {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
                         FILTER (?pNew NOT IN (schema:suggestedAnswer, schema:question))
                         BIND(IF(isLiteral(?oNew) && STRSTARTS(str(datatype(?oNew)), "https://www.w3.org/"),
                                 STRDT(str(?oNew), IRI(REPLACE(str(datatype(?oNew)), "^https://", "http://"))),
                                 ?oNew) AS ?oNewFixed)
+                    }
+                }
+                OPTIONAL {
+                    GRAPH ${sparqlEscapeUri(targetGraph)} {
+                        ${sparqlEscapeUri(feedbackUri)} ?pNew ?oOld .
                     }
                 }
             }
