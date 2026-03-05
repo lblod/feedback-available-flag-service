@@ -89,9 +89,8 @@ async function handleMissedDeltas() {
         console.log('Starting missed deltas healing...');
 
         const feedbacksWithNoLpdcStatus = await InstanceRepository.findFeedbacksMissingLpdcStatus();
-        if (DEBUG) {
-            console.log(`Found ${feedbacksWithNoLpdcStatus.length} feedbacks missing lpdc-status`);
-        }
+        console.log(`Found ${feedbacksWithNoLpdcStatus.length} feedbacks missing lpdc-status`);
+
         if (feedbacksWithNoLpdcStatus.length > 0) {
             await Promise.allSettled(
                 feedbacksWithNoLpdcStatus.map(feedback => InstanceRepository.setLpdcStatus(feedback))
@@ -100,9 +99,8 @@ async function handleMissedDeltas() {
         }
 
         const incorrectlyFlaggedInstances = await InstanceRepository.findIncorrectlyFlaggedInstances();
-        if (DEBUG) {
-            console.log(`Found ${incorrectlyFlaggedInstances.length} incorrectly flagged instances (should be false)`);
-        }
+        console.log(`Found ${incorrectlyFlaggedInstances.length} incorrectly flagged instances (should be false)`);
+
         if (incorrectlyFlaggedInstances.length > 0) {
             await Promise.allSettled(
                 incorrectlyFlaggedInstances.map(instance => InstanceRepository.updateInstanceFlagged(instance, false))
@@ -111,9 +109,8 @@ async function handleMissedDeltas() {
         }
 
         const unflaggedInstances = await InstanceRepository.findUnflaggedInstancesWithStatus();
-        if (DEBUG) {
-            console.log(`Found ${unflaggedInstances.length} unflagged instances (should be true)`);
-        }
+        console.log(`Found ${unflaggedInstances.length} unflagged instances (should be true)`);
+
         if (unflaggedInstances.length > 0) {
             await Promise.allSettled(
                 unflaggedInstances.map(instance => InstanceRepository.updateInstanceFlagged(instance, true))
@@ -154,9 +151,8 @@ app.post('/delta-ingest', (req, res) => {
 
     let newSnapshotInsertURIs = new Delta(req.body).getInsertsForLdes();
 
-    if (DEBUG) {
-        console.log(`Extracted ${newSnapshotInsertURIs.length} new snapshot URIs:`, newSnapshotInsertURIs);
-    }
+    console.log(`Extracted ${newSnapshotInsertURIs.length} new snapshot URIs:`, newSnapshotInsertURIs);
+
 
     if (!newSnapshotInsertURIs) {
         console.log('Delta did not contain any new snapshots in the ldes graph, awaiting the next batch!');
@@ -187,9 +183,8 @@ app.post('/delta-status-start', (req, res) => {
     let newFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
         IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI);
 
-    if (DEBUG) {
-        console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
-    }
+    console.log(`Extracted ${newFeedbackInsertURIs.length} new feedback URIs:`, newFeedbackInsertURIs);
+
 
     if (!newFeedbackInsertURIs.length) {
         console.log('Delta did not contain any new feedback in start status, awaiting the next batch!');
@@ -220,9 +215,8 @@ app.post('/delta-status-end', (req, res) => {
     let processedFeedbackInsertURIs = new Delta(req.body).getInsertsFor(
         LPDC_STATUS_PREDICATE, LPDC_STATUS_END_URI);
 
-    if (DEBUG) {
-        console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
-    }
+    console.log(`Extracted ${processedFeedbackInsertURIs.length} processed feedback URIs:`, processedFeedbackInsertURIs);
+
 
     if (!processedFeedbackInsertURIs.length) {
         console.log('Delta did not contain any processed feedback, awaiting the next batch!');

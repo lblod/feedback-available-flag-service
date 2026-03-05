@@ -1,7 +1,13 @@
 import {sparqlEscapeUri, sparqlEscapeString, uuid} from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
-import {extractFinalPartUri, transformIpdcToLpdcUri} from "../utils/uri-utils";
-import {DEBUG, LDES_GRAPH, UNKNOWN_GRAPH} from "../../env";
+import {transformIpdcToLpdcUri} from "../utils/uri-utils";
+import {
+    DEBUG,
+    IPDC_STATUS_PREDICATE,
+    IPDC_STATUS_START_URI,
+    LDES_GRAPH,
+    UNKNOWN_GRAPH
+} from "../../env";
 
 class LdesRepository {
 
@@ -80,9 +86,9 @@ class LdesRepository {
     };
 
     /**
-     * Check if the given feedbackUri is already in lpdc data
+     * Check if the given feedbackUri is already in lpdc data and return the org graph where this feedback resides.
      */
-    static checkIfFeedbackInLpdcData = async function (feedbackUri) {
+    static getOrgGraphForExistingFeedback = async function (feedbackUri) {
         if (!feedbackUri)
             throw 'feedbackUri cannot be null.';
 
@@ -93,7 +99,8 @@ class LdesRepository {
                 GRAPH ?g {
                     ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
                 }
-                FILTER (?g != ${sparqlEscapeUri(LDES_GRAPH)} && ?g != ${sparqlEscapeUri(UNKNOWN_GRAPH)})
+                FILTER STRSTARTS(str(?g), "http://mu.semte.ch/graphs/organizations/")
+                FILTER STRENDS(str(?g), "/LoketLB-LPDCGebruiker")
             }
         `);
 
@@ -110,34 +117,17 @@ class LdesRepository {
      * This recursively copies all triples where feedbackUri is the subject,
      * including nested blank nodes.
      */
-    static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph) {
+    static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph, transformedInstanceUri) {
         if (!feedbackUri)
             throw 'feedbackUri cannot be null.';
         if (!bestuurseenheidUri)
             throw 'bestuurseenheidUri cannot be null.';
         if (!targetGraph)
             throw 'targetGraph cannot be null.';
+        if (!transformedInstanceUri)
+            throw 'transformedInstanceUri cannot be null.';
 
-        const instanceUriResult = await query(`
-          PREFIX schema: <https://schema.org/>
-          
-          SELECT ?instanceUri
-          WHERE {
-              GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
-                  ${sparqlEscapeUri(feedbackUri)} schema:about ?instanceUri .
-              }
-          }
-      `);
-
-        const instanceUri = instanceUriResult.results.bindings[0]?.instanceUri?.value;
-        let transformedUri;
-        if (instanceUri) {
-            transformedUri = transformIpdcToLpdcUri(instanceUri);
-        } else {
-            throw 'feedback has no instance linked to it.';
-        }
-
-        const feedbackUuid = extractFinalPartUri(feedbackUri);
+        const feedbackUuid = uuid();
         const answerUuid = uuid();
         const questionUuid = uuid();
 
@@ -154,7 +144,7 @@ class LdesRepository {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
               ${sparqlEscapeUri(feedbackUri)} ?p ?oReplacedFinal .
 
-              ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedUri)} .
+              ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedInstanceUri)} .
               ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
               ${sparqlEscapeUri(feedbackUri)} mu:uuid ${sparqlEscapeString(feedbackUuid)} .
 
@@ -317,7 +307,7 @@ class LdesRepository {
                 {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
-
+                        FILTER (?pNew NOT IN (schema:suggestedAnswer, schema:question))
                         BIND(IF(isLiteral(?oNew) && STRSTARTS(str(datatype(?oNew)), "https://www.w3.org/"),
                                 STRDT(str(?oNew), IRI(REPLACE(str(datatype(?oNew)), "^https://", "http://"))),
                                 ?oNew) AS ?oNewFixed)
@@ -330,6 +320,54 @@ class LdesRepository {
             console.log(`  ✓ Updated feedback data for ${feedbackUri} in graph ${targetGraph}`);
         }
     };
+
+    static async getTransformedInstanceUri(feedbackUri) {
+        if (!feedbackUri)
+            throw 'feedbackUri cannot be null.';
+
+        const instanceUriResult = await query(`
+          PREFIX schema: <https://schema.org/>
+          
+          SELECT ?instanceUri
+          WHERE {
+              GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                  ${sparqlEscapeUri(feedbackUri)} schema:about ?instanceUri .
+              }
+          }
+      `);
+
+        const instanceUri = instanceUriResult.results.bindings[0]?.instanceUri?.value;
+        if (!instanceUri) {
+            throw 'feedback has no instance linked to it.';
+        }
+
+        const transformedUri = transformIpdcToLpdcUri(instanceUri);
+        const checkInstanceExist = await query(`
+          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+          ASK{
+               ${sparqlEscapeUri(transformedUri)} a lpdcExt:InstancePublicService.
+          }
+      `);
+
+        if (checkInstanceExist.boolean) {
+            return transformedUri;
+        } else {
+            return null;
+        }
+
+    }
+
+    static async isFeedbackInIpdcStartStatus(feedbackUri) {
+        const result = await query(`
+          PREFIX schema: <https://schema.org/>
+          ASK{
+               ${sparqlEscapeUri(feedbackUri)} a schema:Conversation.
+               ${sparqlEscapeUri(feedbackUri)}  ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)}  ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
+          }
+      `);
+
+        return result.boolean;
+    }
 }
 
 export default LdesRepository;

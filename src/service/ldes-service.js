@@ -17,7 +17,7 @@ class LdesService {
         for (const feedbackUri of feedbackUris) {
             try {
                 console.log(`\n--- Processing snapshot: ${feedbackUri} ---`);
-                const lpdcFeedbackOrganizationGraph = await LdesRepository.checkIfFeedbackInLpdcData(feedbackUri);
+                const lpdcFeedbackOrganizationGraph = await LdesRepository.getOrgGraphForExistingFeedback(feedbackUri);
                 if (lpdcFeedbackOrganizationGraph) {
                     await LdesRepository.updateFeedbackInOrganizationGraph(feedbackUri, lpdcFeedbackOrganizationGraph);
                 } else {
@@ -37,9 +37,15 @@ class LdesService {
      * Create a new feedback object in lpdc data based on the ldes snapshot.
      */
     static createNewFeedbackFromSnapshot = async function (feedbackUri) {
+        await LdesService.ensureFeedbackInStartStatus(feedbackUri);
         const recipientConcept = await LdesService.ensureOrganizationConcepts(feedbackUri);
         const bestuurseenheid = await LdesService.findOrganizationGraph(recipientConcept, feedbackUri);
-        await LdesRepository.copyFeedbackToOrganizationGraph(feedbackUri, bestuurseenheid.uri, bestuurseenheid.graph);
+        const transformedInstanceUri = await LdesRepository.getTransformedInstanceUri(feedbackUri);
+        if(!transformedInstanceUri){
+            await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
+            throw `  ✗ Linked instance doesn't exist in LPDC, added ${feedbackUri} to the unknown graph `
+        }
+        await LdesRepository.copyFeedbackToOrganizationGraph(feedbackUri, bestuurseenheid.uri, bestuurseenheid.graph, transformedInstanceUri);
         await LdesRepository.removeFeedbackFromUnknownGraph(feedbackUri);
     };
 
@@ -130,6 +136,15 @@ class LdesService {
 
         return bestuurseenheid;
     };
+
+    static async ensureFeedbackInStartStatus(feedbackUri) {
+        const hasStartStatus = await LdesRepository.isFeedbackInIpdcStartStatus(feedbackUri);
+        if(!hasStartStatus){
+            await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
+            throw `  ✗ new feedback arrived in different status than expected start status, added ${feedbackUri} to the unknown graph `
+        }
+
+    }
 }
 
 export default LdesService;
