@@ -6,7 +6,7 @@ import {
     LPDC_STATUS_START_URI,
     LPDC_STATUS_PREDICATE,
     IPDC_STATUS_PREDICATE,
-    IPDC_STATUS_START_URI, LPDC_STATUS_END_URI, LDES_GRAPH, UNKNOWN_GRAPH
+    IPDC_STATUS_START_URI, LPDC_STATUS_END_URI, LPDC_STATUS_PUBLISHED_URI, LDES_GRAPH, UNKNOWN_GRAPH
 } from '../../env';
 
 
@@ -116,6 +116,10 @@ class InstanceRepository {
           FILTER NOT EXISTS {
             ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
           }
+          FILTER NOT EXISTS {
+            ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_PUBLISHED_URI)}.
+          }
+          
         }
       }
     `);
@@ -139,6 +143,9 @@ class InstanceRepository {
         FILTER NOT EXISTS {
           ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
         }
+        FILTER NOT EXISTS {
+          ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_PUBLISHED_URI)}.
+        }
         OPTIONAL { ?instance lpdcExt:feedbackAvailable ?flagged . }
         FILTER(!BOUND(?flagged) || ?flagged = ${sparqlEscapeBool(false)})
       }
@@ -149,7 +156,7 @@ class InstanceRepository {
 
     /**
      * Check if an instance has any active feedbacks.
-     * An active feedback has IPDC_STATUS_START_URI but does NOT have LPDC_STATUS_END_URI.
+     * An active feedback has IPDC_STATUS_START_URI but does NOT have LPDC_STATUS_END_URI or LPDC_STATUS_PUBLISHED_URI.
      * Returns true if there are active feedbacks, false otherwise.
      */
     static hasActiveFeedbacks = async function (instanceUri) {
@@ -166,6 +173,9 @@ class InstanceRepository {
         FILTER NOT EXISTS {
           ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
         }
+        FILTER NOT EXISTS {
+          ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_PUBLISHED_URI)}.
+        }
       }
     `);
 
@@ -174,7 +184,6 @@ class InstanceRepository {
 
     /**
      * Find all feedbacks that have any ipdc-status but are missing lpdc-status.
-     * These feedbacks should have their lpdc-status set to OPEN.
      */
     static findFeedbacksMissingLpdcStatus = async function () {
         const result = await query(`
