@@ -3,14 +3,14 @@
  */
 export function extractFinalPartUri(uri) {
     if (!uri || typeof uri !== 'string') {
-        throw 'URI must be a non-empty string';
+        throw new Error('URI must be a non-empty string');
     }
 
     const segments = uri.split('/');
     const code = segments[segments.length - 1];
 
     if (!code) {
-        throw 'Could not extract from URI';
+        throw new Error('Could not extract from URI');
     }
 
     return code;
@@ -32,7 +32,7 @@ export function isOvoUri(uri) {
  */
 export function getOrganizationGraphFromUuid(uuid) {
     if (!uuid || typeof uuid !== 'string') {
-        throw 'uuid must be a non-empty string';
+        throw new Error('uuid must be a non-empty string');
     }
 
     return "http://mu.semte.ch/graphs/organizations/" + uuid + "/LoketLB-LPDCGebruiker";
@@ -43,7 +43,7 @@ export function getOrganizationGraphFromUuid(uuid) {
  */
 export function transformIpdcToLpdcUri(ipdcUri) {
     if (!ipdcUri || typeof ipdcUri !== 'string') {
-        throw 'ipdcUri must be a non-empty string';
+        throw new Error('ipdcUri must be a non-empty string');
     }
 
     const segments = ipdcUri.split('/');

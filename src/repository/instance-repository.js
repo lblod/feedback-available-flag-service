@@ -18,7 +18,7 @@ class InstanceRepository {
      */
     static findInstanceByURI = async function (uri) {
         if (!uri)
-            throw 'uri can not be null.';
+            throw new Error('uri can not be null.');
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
       
@@ -29,9 +29,9 @@ class InstanceRepository {
       }
     `);
         if (result.results.bindings.length === 0)
-            throw `URI <${uri}> is not linked to an instance, data corrupt?`;
+            throw new Error(`URI <${uri}> is not linked to an instance, data corrupt?`);
         if (result.results.bindings.length > 1)
-            throw `multiple results exists while doing lookup on URI <${uri}>, data corrupt?`;
+            throw new Error(`multiple results exists while doing lookup on URI <${uri}>, data corrupt?`);
         return result.results.bindings[0].instance.value;
     };
 
@@ -41,7 +41,7 @@ class InstanceRepository {
      */
     static updateInstanceFlagged = async function (instanceUri, flagged) {
         if (!instanceUri)
-            throw 'instanceUri can not be null.';
+            throw new Error('instanceUri can not be null.');
 
         await update(`
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
@@ -73,7 +73,7 @@ class InstanceRepository {
      */
     static setLpdcStatus = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri can not be null.';
+            throw new Error('feedbackUri can not be null.');
 
         await update(`
       INSERT {
@@ -154,7 +154,7 @@ class InstanceRepository {
      */
     static hasActiveFeedbacks = async function (instanceUri) {
         if (!instanceUri)
-            throw 'instanceUri cannot be null.';
+            throw new Error('instanceUri cannot be null.');
 
         const result = await query(`
       PREFIX schema2: <https://schema.org/>

@@ -13,7 +13,7 @@ class OrganizationRepository {
      */
     static findConceptByUri = async function (organizationUri) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -50,7 +50,7 @@ class OrganizationRepository {
      */
     static findBestuurseenheidByOvoCode = async function (ovoCode) {
         if (!ovoCode)
-            throw 'ovo code cannot be null.';
+            throw new Error('ovo code cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -91,7 +91,7 @@ class OrganizationRepository {
      */
     static findBestuurseenheidByUri = async function (uri) {
         if (!uri)
-            throw 'uri cannot be null.';
+            throw new Error('uri cannot be null.');
 
         const result = await query(`
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -122,11 +122,11 @@ class OrganizationRepository {
      */
     static createConcept = async function (organizationUri, label, notation) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
         if (!label)
-            throw 'label cannot be null.';
+            throw new Error('label cannot be null.');
         if (!notation)
-            throw 'notation cannot be null.';
+            throw new Error('notation cannot be null.');
 
         const conceptUuid = uuid();
 
@@ -134,12 +134,20 @@ class OrganizationRepository {
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 
-            INSERT DATA {
+            INSERT {
                 GRAPH ${sparqlEscapeUri(PUBLIC_GRAPH)} {
-                    ${sparqlEscapeUri(organizationUri)} a skos:Concept ;
+                    ?s a skos:Concept ;
                         skos:prefLabel ${sparqlEscapeString(label)} ;
                         skos:notation ${sparqlEscapeString(notation)} ;
                         mu:uuid ${sparqlEscapeString(conceptUuid)} .
+                }
+            }
+            WHERE {
+                VALUES ?s { ${sparqlEscapeUri(organizationUri)} }
+                FILTER NOT EXISTS {
+                    GRAPH ${sparqlEscapeUri(PUBLIC_GRAPH)} {
+                        ?s a skos:Concept .
+                    }
                 }
             }
         `);
@@ -170,13 +178,13 @@ class OrganizationRepository {
             const apiUrl = `https://api.wegwijs.vlaanderen.be/v1/search/organisations?q=ovoNumber:${ovoCode}`;
             const response = await fetch(apiUrl);
             if (!response.ok) {
-                throw `Failed to fetch from Wegwijs API: ${response.status} ${response.statusText}`;
+                throw new Error(`Failed to fetch from Wegwijs API: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
 
             if (!data || !Array.isArray(data) || data.length === 0) {
-                throw `No organization found for OVO code: ${ovoCode}`;
+                throw new Error(`No organization found for OVO code: ${ovoCode}`);
             }
 
             return {
@@ -195,7 +203,7 @@ class OrganizationRepository {
      */
     static updateOvoConceptWithNotation = async function (organizationUri, concept) {
         if (!organizationUri || !concept.notation || !concept.label)
-            throw 'organizationUri and notation cannot be null.';
+            throw new Error('organizationUri and notation cannot be null.');
         await update(`
                         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 

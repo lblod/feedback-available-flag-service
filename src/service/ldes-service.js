@@ -1,7 +1,8 @@
 import LdesRepository from '../repository/ldes-repository.js';
 import OrganizationRepository from '../repository/organization-repository.js';
-import {isOvoUri} from "../utils/uri-utils";
-import {DEBUG} from "../../env";
+import {isOvoUri} from "../utils/uri-utils.js";
+import {DEBUG} from "../../env.js";
+import PublishRepository from "../repository/publish-repository.js";
 
 class LdesService {
 
@@ -43,7 +44,7 @@ class LdesService {
         const transformedInstanceUri = await LdesRepository.getTransformedInstanceUri(feedbackUri);
         if(!transformedInstanceUri){
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ Linked instance doesn't exist in LPDC, added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ Linked instance doesn't exist in LPDC, added ${feedbackUri} to the unknown graph `);
         }
         await LdesRepository.copyFeedbackToOrganizationGraph(feedbackUri, bestuurseenheid.uri, bestuurseenheid.graph, transformedInstanceUri);
         await LdesRepository.removeFeedbackFromUnknownGraph(feedbackUri);
@@ -64,6 +65,8 @@ class LdesService {
                 console.log(`  ✓ Recipient concept: ${recipientConcept.label} (OVO: ${recipientConcept.notation})`);
             }
         } else {
+            const ovoUri = await PublishRepository.findOvoUriFromBestuurseenheidViaOvoCode(organizationUris.recipient)
+            await LdesService.ensureOvoConceptExists(ovoUri);
             recipientConcept = {
                 uri: organizationUris.recipient,
                 label: null,
@@ -91,7 +94,7 @@ class LdesService {
      */
     static ensureOvoConceptExists = async function (organizationUri) {
         if (!organizationUri)
-            throw 'organizationUri cannot be null.';
+            throw new Error('organizationUri cannot be null.');
 
         let concept = await OrganizationRepository.findConceptByUri(organizationUri);
 
@@ -126,7 +129,7 @@ class LdesService {
 
         if (!bestuurseenheid) {
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `);
         }
 
         if (DEBUG) {
@@ -141,7 +144,7 @@ class LdesService {
         const hasStartStatus = await LdesRepository.isFeedbackInIpdcStartStatus(feedbackUri);
         if(!hasStartStatus){
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw `  ✗ new feedback arrived in different status than expected start status, added ${feedbackUri} to the unknown graph `
+            throw new Error(`  ✗ new feedback arrived in different status than expected start status, added ${feedbackUri} to the unknown graph `);
         }
 
     }

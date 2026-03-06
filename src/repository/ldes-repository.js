@@ -51,7 +51,7 @@ class LdesRepository {
      */
     static extractOrganizationUris = async function (snapshotUri) {
         if (!snapshotUri)
-            throw 'snapshotUri cannot be null.';
+            throw new Error('snapshotUri cannot be null.');
 
         const result = await query(`
             PREFIX schema: <https://schema.org/>
@@ -70,13 +70,13 @@ class LdesRepository {
         `);
 
         if (result.results.bindings.length === 0) {
-            throw `No organization URIs found in snapshot ${snapshotUri}`;
+            throw new Error(`No organization URIs found in snapshot ${snapshotUri}`);
         }
 
         const binding = result.results.bindings[0];
 
         if (!binding.recipientUri) {
-            throw `No recipient URI found in snapshot ${snapshotUri} - cannot determine organization graph`;
+            throw new Error(`No recipient URI found in snapshot ${snapshotUri} - cannot determine organization graph`);
         }
 
         return {
@@ -90,7 +90,7 @@ class LdesRepository {
      */
     static getOrgGraphForExistingFeedback = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         const result = await query(`
             PREFIX schema: <https://schema.org/>
@@ -119,13 +119,13 @@ class LdesRepository {
      */
     static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph, transformedInstanceUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
         if (!bestuurseenheidUri)
-            throw 'bestuurseenheidUri cannot be null.';
+            throw new Error('bestuurseenheidUri cannot be null.');
         if (!targetGraph)
-            throw 'targetGraph cannot be null.';
+            throw new Error('targetGraph cannot be null.');
         if (!transformedInstanceUri)
-            throw 'transformedInstanceUri cannot be null.';
+            throw new Error('transformedInstanceUri cannot be null.');
 
         const feedbackUuid = uuid();
         const answerUuid = uuid();
@@ -203,7 +203,7 @@ class LdesRepository {
      */
     static addFeedbackToUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         await update(`
           PREFIX schema: <https://schema.org/>
@@ -251,7 +251,7 @@ class LdesRepository {
      */
     static removeFeedbackFromUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         await update(`
           PREFIX schema: <https://schema.org/>
@@ -277,9 +277,9 @@ class LdesRepository {
      */
     static updateFeedbackInOrganizationGraph = async function (feedbackUri, targetGraph) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
         if (!targetGraph)
-            throw 'targetGraph cannot be null.';
+            throw new Error('targetGraph cannot be null.');
 
         await update(`
             PREFIX schema: <https://schema.org/>
@@ -289,7 +289,7 @@ class LdesRepository {
 
             DELETE {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
-                    ${sparqlEscapeUri(feedbackUri)} ?p ?o .
+                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oOld .
                 }
             }
             INSERT {
@@ -299,18 +299,17 @@ class LdesRepository {
             }
             WHERE {
                 {
-                    GRAPH ${sparqlEscapeUri(targetGraph)} {
-                        ${sparqlEscapeUri(feedbackUri)} ?p ?o .
-                        FILTER (?p NOT IN (schema:actionStatus, schema:result, skos:primarySubject, lpdcExt:receiverBestuurseenheid, mu:uuid, schema:suggestedAnswer, schema:question))
-                    }
-                }
-                {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
                         FILTER (?pNew NOT IN (schema:suggestedAnswer, schema:question))
                         BIND(IF(isLiteral(?oNew) && STRSTARTS(str(datatype(?oNew)), "https://www.w3.org/"),
                                 STRDT(str(?oNew), IRI(REPLACE(str(datatype(?oNew)), "^https://", "http://"))),
                                 ?oNew) AS ?oNewFixed)
+                    }
+                }
+                OPTIONAL {
+                    GRAPH ${sparqlEscapeUri(targetGraph)} {
+                        ${sparqlEscapeUri(feedbackUri)} ?pNew ?oOld .
                     }
                 }
             }
@@ -323,7 +322,7 @@ class LdesRepository {
 
     static async getTransformedInstanceUri(feedbackUri) {
         if (!feedbackUri)
-            throw 'feedbackUri cannot be null.';
+            throw new Error('feedbackUri cannot be null.');
 
         const instanceUriResult = await query(`
           PREFIX schema: <https://schema.org/>
@@ -338,7 +337,7 @@ class LdesRepository {
 
         const instanceUri = instanceUriResult.results.bindings[0]?.instanceUri?.value;
         if (!instanceUri) {
-            throw 'feedback has no instance linked to it.';
+            throw new Error('feedback has no instance linked to it.');
         }
 
         const transformedUri = transformIpdcToLpdcUri(instanceUri);
@@ -358,6 +357,9 @@ class LdesRepository {
     }
 
     static async isFeedbackInIpdcStartStatus(feedbackUri) {
+        if (!feedbackUri)
+            throw new Error('feedbackUri cannot be null.');
+
         const result = await query(`
           PREFIX schema: <https://schema.org/>
           ASK{

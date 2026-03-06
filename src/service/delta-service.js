@@ -1,4 +1,4 @@
-import InstanceRepository from '../repository/instance-repository';
+import InstanceRepository from '../repository/instance-repository.js';
 
 
 class DeltaService {
