@@ -1,17 +1,16 @@
 import env from 'env-var';
 
-const IPDC_STATUS_PREDICATE = env.get('IPDC_STATUS_PREDICATE').default('http://www.w3.org/ns/adms#status').asString();
+const IPDC_STATUS_PREDICATE = env.get('IPDC_STATUS_PREDICATE').default('https://www.w3.org/ns/adms#status').asString();
 const IPDC_STATUS_START_URI = env.get('IPDC_STATUS_START_URI').default('https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT').asString();
-
 const INSTANCE_PREDICATE = env.get('INSTANCE_PREDICATE').default('http://www.w3.org/2004/02/skos/core#primarySubject').asString();
 const INSTANCE_TYPE = env.get('INSTANCE_TYPE').default('https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService').asString();
-
 const LPDC_STATUS_PREDICATE = env.get('LPDC_STATUS_PREDICATE').default('https://schema.org/actionStatus').asString();
 const LPDC_STATUS_START_URI = env.get('LPDC_STATUS_START_URI').default('http://lblod.data.gift/concepts/1b3c5e7f-2a4d-4c6e-9f1b-3d5a7c9e2f4b').asString();
 const LPDC_STATUS_END_URI = env.get('LPDC_STATUS_END_URI').default('http://lblod.data.gift/concepts/2e4a6c8d-9f1b-4d3e-5a7c-9e1f3b5d7a9c').asString();
-
-
+const LDES_GRAPH = env.get('LDES_GRAPH').default('http://mu.semte.ch/graphs/lpdc/feedbacksnapshot-ldes-data').asString();
+const UNKNOWN_GRAPH = env.get('UNKNOWN_GRAPH').default('http://mu.semte.ch/graphs/lpdc/feedbacksnapshot-ldes-data/unknown').asString();
 const HEALING_CRON = env.get('HEALING_CRON').default('0 3 * * *').asString();
+const INGEST_CRON = env.get('INGEST_CRON').default('*/1 * * * *').asString();
 const DEBUG = env.get('DEBUG').default('false').asBool();
 
 
@@ -23,6 +22,9 @@ export {
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_START_URI,
     LPDC_STATUS_END_URI,
+    LDES_GRAPH,
+    UNKNOWN_GRAPH,
     HEALING_CRON,
+    INGEST_CRON,
     DEBUG
 };

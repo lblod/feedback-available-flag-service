@@ -6,7 +6,7 @@ import {
     LPDC_STATUS_START_URI,
     LPDC_STATUS_PREDICATE,
     IPDC_STATUS_PREDICATE,
-    IPDC_STATUS_START_URI, LPDC_STATUS_END_URI
+    IPDC_STATUS_START_URI, LPDC_STATUS_END_URI, LDES_GRAPH, UNKNOWN_GRAPH
 } from '../../env';
 
 
@@ -22,7 +22,7 @@ class InstanceRepository {
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
       
-      SELECT ?instance WHERE {
+      SELECT DISTINCT ?instance WHERE {
         VALUES ?uri { ${sparqlEscapeUri(uri)} }
         ?uri a schema2:Conversation.
         ?uri ${sparqlEscapeUri(INSTANCE_PREDICATE)} ?instance
@@ -40,8 +40,8 @@ class InstanceRepository {
      *
      */
     static updateInstanceFlagged = async function (instanceUri, flagged) {
-        if (!instanceUri || !INSTANCE_TYPE)
-            throw 'instanceUri AND INSTANCE_TYPE can not be null.';
+        if (!instanceUri)
+            throw 'instanceUri can not be null.';
 
         await update(`
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
@@ -66,29 +66,34 @@ class InstanceRepository {
     };
 
     /**
-     * Set the ldpc-status of given feedbackUri to starting.
-     *
+     * Set the ldpc-status of given feedbackUri based on its ipdc-status.
+     * Sets to LPDC_STATUS_START_URI if ipdc-status is IPDC_STATUS_START_URI,
+     * otherwise sets to LPDC_STATUS_END_URI.
+     * Only sets if no lpdc-status already exists.
      */
     static setLpdcStatus = async function (feedbackUri) {
         if (!feedbackUri)
             throw 'feedbackUri can not be null.';
 
         await update(`
-      DELETE {
-        GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue .
-        }
-      }
       INSERT {
         GRAPH ?g {
-            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_START_URI)}  .
+            ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?lpdcStatusToSet  .
         }
       }
       WHERE {
         GRAPH ?g {
         ${sparqlEscapeUri(feedbackUri)} a ${sparqlEscapeUri("https://schema.org/Conversation")}.
+        ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?ipdcStatus.
         OPTIONAL { ${sparqlEscapeUri(feedbackUri)} ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?oldValue . }
+
+        BIND(IF(?ipdcStatus = ${sparqlEscapeUri(IPDC_STATUS_START_URI)},
+                ${sparqlEscapeUri(LPDC_STATUS_START_URI)},
+                ${sparqlEscapeUri(LPDC_STATUS_END_URI)}) AS ?lpdcStatusToSet)
         }
+
+        FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)} && ?g != ${sparqlEscapeUri(UNKNOWN_GRAPH)})
+        FILTER(!BOUND(?oldValue))
       }
     `);
     };
@@ -97,14 +102,12 @@ class InstanceRepository {
      * Find all instances that are flagged true but don't have any active feedbacks.
      */
     static findIncorrectlyFlaggedInstances = async function () {
-        if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !LPDC_STATUS_PREDICATE || !LPDC_STATUS_END_URI)
-            throw 'IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, LPDC_STATUS_PREDICATE, and LPDC_STATUS_END_URI cannot be null.';
-
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
 
       SELECT DISTINCT ?instance WHERE {
+        ?instance a ${sparqlEscapeUri(INSTANCE_TYPE)}.
         ?instance lpdcExt:feedbackAvailable ${sparqlEscapeBool(true)}.
         FILTER NOT EXISTS {
           ?feedback a schema2:Conversation.
@@ -124,9 +127,6 @@ class InstanceRepository {
      * Find all instances that are not flagged or flagged false but have active feedbacks.
      */
     static findUnflaggedInstancesWithStatus = async function () {
-        if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !INSTANCE_PREDICATE || !LPDC_STATUS_PREDICATE || !LPDC_STATUS_END_URI)
-            throw 'IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, INSTANCE_PREDICATE, LPDC_STATUS_PREDICATE, and LPDC_STATUS_END_URI cannot be null.';
-
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
@@ -135,6 +135,7 @@ class InstanceRepository {
         ?feedback a schema2:Conversation.
         ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
         ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ?instance.
+        ?instance a ${sparqlEscapeUri(INSTANCE_TYPE)}.
         FILTER NOT EXISTS {
           ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
         }
@@ -152,8 +153,8 @@ class InstanceRepository {
      * Returns true if there are active feedbacks, false otherwise.
      */
     static hasActiveFeedbacks = async function (instanceUri) {
-        if (!instanceUri || !IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !LPDC_STATUS_PREDICATE || !LPDC_STATUS_END_URI)
-            throw 'instanceUri, IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, LPDC_STATUS_PREDICATE, and LPDC_STATUS_END_URI cannot be null.';
+        if (!instanceUri)
+            throw 'instanceUri cannot be null.';
 
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
@@ -172,21 +173,25 @@ class InstanceRepository {
     };
 
     /**
-     * Find all feedbacks that have ipdc-status AANGEMAAKT but are missing lpdc-status.
+     * Find all feedbacks that have any ipdc-status but are missing lpdc-status.
      * These feedbacks should have their lpdc-status set to OPEN.
      */
     static findFeedbacksMissingLpdcStatus = async function () {
-        if (!IPDC_STATUS_PREDICATE || !IPDC_STATUS_START_URI || !LPDC_STATUS_PREDICATE)
-            throw 'IPDC_STATUS_PREDICATE, IPDC_STATUS_START_URI, and LPDC_STATUS_PREDICATE cannot be null.';
-
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
 
       SELECT ?feedback WHERE {
-        ?feedback a schema2:Conversation.
-        ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
+        GRAPH ?g {
+            ?feedback a schema2:Conversation.
+            ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ?ipdcStatus.
+        }
+
+        FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)})
+
         FILTER NOT EXISTS {
-          ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?processingStatus.
+          GRAPH ?g{
+            ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ?processingStatus.
+          }
         }
       }
     `);

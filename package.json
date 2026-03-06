@@ -1,5 +1,5 @@
 {
-  "name": "feedback-available-flag-service",
+  "name": "lpdc-feedback-management-service",
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lblod/feedback-available-flag-service.git"
+    "url": "https://github.com/lblod/lpdc-feedback-management-service.git"
   },
   "private": true,
   "dependencies": {
