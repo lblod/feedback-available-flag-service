@@ -1,6 +1,6 @@
 import env from 'env-var';
 
-const IPDC_STATUS_PREDICATE = env.get('IPDC_STATUS_PREDICATE').default('https://www.w3.org/ns/adms#status').asString();
+const IPDC_STATUS_PREDICATE = env.get('IPDC_STATUS_PREDICATE').default('http://www.w3.org/ns/adms#status').asString();
 const IPDC_STATUS_START_URI = env.get('IPDC_STATUS_START_URI').default('https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT').asString();
 const INSTANCE_PREDICATE = env.get('INSTANCE_PREDICATE').default('http://www.w3.org/2004/02/skos/core#primarySubject').asString();
 const INSTANCE_TYPE = env.get('INSTANCE_TYPE').default('https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService').asString();
