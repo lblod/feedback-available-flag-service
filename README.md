@@ -131,7 +131,7 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
 | `LPDC_STATUS_END_URI`       | No       | 'http://lblod.data.gift/concepts/2e4a6c8d-9f1b-4d3e-5a7c-9e1f3b5d7a9c'             | Object URI of the specific lpdc-status to remove the flag on linked instance                        |
 | `LPDC_STATUS_PUBLISHED_URI` | No       | 'http://lblod.data.gift/concepts/a0575bbd-17b6-4f04-b1b2-e554e29cd428'             | Object URI of the specific lpdc-status to set when publishing a feedback object                     |
 | `LDES_GRAPH`                | No       | 'http://mu.semte.ch/graphs/lpdc/feedbacksnapshot-ldes-data'                        | Graph URI where feedback ldes data arrives from ipdc                                                |
-| `UNKNOWN_GRAPH`             | No       | 'http://mu.semte.ch/graphs/lpdc/feedbacksnapshot-ldes-data/unknown-receiver'       | Graph URI where feedbacks are saved when receiver is not known in lpdc                              |
+| `UNKNOWN_GRAPH`             | No       | 'http://mu.semte.ch/graphs/lpdc/feedbacksnapshot-ldes-data/unknown'                | Graph URI where feedbacks are saved when receiver is not known in lpdc                              |
 | `HEALING_CRON`              | No       | '0 3 * * *'                                                                        | Cron pattern to start healing cronjob                                                               |
 | `INGEST_CRON`               | No       | '*/1 * * * *'                                                                      | Cron pattern to start ldes ingest cronjob                                                           |
 | `PUBLISH_CRON`              | No       | '*/1 * * * *'                                                                      | Cron pattern to start feedback publish cronjob                                                      |
@@ -147,9 +147,13 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
 
 Health check endpoint. Returns a welcome message.
 
-### POST /delta
+**Response**:
 
-Receives delta notifications from the delta-notifier. Flags instances based on status change.
+- `200 OK` - Returns "Hello, you've reached the lpdc-feedback-management-service."
+
+### POST /delta-ingest
+
+Receives delta notifications for new feedback snapshots arriving in the LDES graph.
 
 **Request Body**: Delta notification in mu-delta-notifier format (v0.0.1)
 
@@ -157,7 +161,79 @@ Receives delta notifications from the delta-notifier. Flags instances based on s
 
 - `204 No Content` - Delta received and being processed
 
+**Functionality**:
+- Extracts new `schema:Conversation` resources from the LDES graph
+- Processes feedback snapshots asynchronously
+- Enriches and moves feedback to appropriate organization graphs
+
+### POST /delta-status-start
+
+Receives delta notifications when feedback changes to the configured start ipdc-status (default: `AANGEMAAKT`).
+
+**Request Body**: Delta notification in mu-delta-notifier format (v0.0.1)
+
+**Response**:
+
+- `204 No Content` - Delta received and being processed
+
+**Functionality**:
+- Extracts feedback URIs that received the start ipdc-status
+- Finds linked instances
+- Sets `lpdcExt:feedbackAvailable` flag to `true` on instances
+- Sets the configured lpdc-status on feedback
+
+### POST /delta-status-end
+
+Receives delta notifications when feedback changes to the configured end lpdc-status (default: `Verwerkt`).
+
+**Request Body**: Delta notification in mu-delta-notifier format (v0.0.1)
+
+**Response**:
+
+- `204 No Content` - Delta received and being processed
+
+**Functionality**:
+- Extracts feedback URIs that received the end lpdc-status
+- Finds linked instances
+- Unflags instances if no other open feedback exists
+- Sets `lpdcExt:feedbackAvailable` flag to `false` when appropriate
+
+## Scheduled Jobs
+
+### LDES Ingest Job
+
+**Schedule**: Configurable via `INGEST_CRON` (default: `*/1 * * * *` - every minute)
+
+**Functionality**:
+- Processes any pending feedback snapshots in the LDES graph
+- Complements delta-based ingestion to ensure no snapshots are missed
+- Runs asynchronously to avoid blocking
+
+### Publish Job
+
+**Schedule**: Configurable via `PUBLISH_CRON` (default: `*/1 * * * *` - every minute)
+
+**Functionality**:
+- Finds feedback answers ready to publish to IPDC
+- Validates and enriches payloads (converts bestuurseenheid to OVO concept if needed)
+- Sends HTTP POST requests to configured `IPDC_JSON_ENDPOINT` with `IPDC_X_API_KEY`
+- On success: Updates feedback to published status
+- On failure: Increments retry counter (max: `RETRY_COUNTER_LIMIT`)
+- Records publication errors in dedicated graph for debugging
+
+### Healing Job
+
+**Schedule**: Configurable via `HEALING_CRON` (default: `0 3 * * *` - daily at 3 AM)
+
+**Functionality**:
+- Recovers from missed delta notifications
+- Sets missing lpdc-status on feedbacks with ipdc-status `AANGEMAAKT`
+- Unflags instances that are incorrectly flagged as having feedback
+- Flags instances that should be flagged but aren't
+- Ensures data consistency across the system
+
 ## Related Services
 
 - [delta-notifier](https://github.com/mu-semtech/delta-notifier) - Triggers this service on data changes
-- [LPDC](https://github.com/lblod/app-lpdc-digitaal-loket) - Used in this app
+- [ldes-consumer-feedbacksnapshot-ipdc](https://github.com/lblod/ldes-consumer-service) - Consumes IPDC LDES feed into the database
+- [LPDC](https://github.com/lblod/app-lpdc-digitaal-loket) - Main application using this service
