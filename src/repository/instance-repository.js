@@ -135,7 +135,7 @@ class InstanceRepository {
       PREFIX schema2: <https://schema.org/>
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
 
-      SELECT ?instance WHERE {
+      SELECT DISTINCT ?instance WHERE {
         ?feedback a schema2:Conversation.
         ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
         ?feedback ${sparqlEscapeUri(INSTANCE_PREDICATE)} ?instance.
