@@ -51,7 +51,7 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
    match: {
       predicate: {
          type: 'uri',
-                 value: 'https://www.w3.org/ns/adms#status'
+                 value: 'http://www.w3.org/ns/adms#status'
       },
       object: {
          type: 'uri',
@@ -122,7 +122,7 @@ Add a rule to your `config/delta/rules.js` to trigger on feedback status changes
 
 | Variable                    | Required | Default                                                                            | Description                                                                                         |
 |-----------------------------|----------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| `IPDC_STATUS_PREDICATE`     | No       | 'https://www.w3.org/ns/adms#status'                                                | Predicate URI that links feedback with it's ipdc-status                                             |
+| `IPDC_STATUS_PREDICATE`     | No       | 'http://www.w3.org/ns/adms#status'                                                 | Predicate URI that links feedback with it's ipdc-status                                             |
 | `IPDC_STATUS_START_URI`     | No       | 'https://ipdc.vlaanderen.be/ns/FeedbackStatus#AANGEMAAKT'                          | Object URI of the specific ipdc-status to flag on                                                   |
 | `INSTANCE_PREDICATE`        | No       | 'http://www.w3.org/2004/02/skos/core#primarySubject'                               | Predicate URI that links feedback to instance                                                       |
 | `INSTANCE_TYPE`             | No       | 'https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#InstancePublicService' | Type URI of the instance that has to be flagged                                                     |
