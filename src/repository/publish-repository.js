@@ -19,9 +19,7 @@ class PublishRepository {
      */
     static getFeedbackToPublish = async function () {
         const result = await query(`
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
             PREFIX schema2: <https://schema.org/>
-            PREFIX prov:   <https://www.w3.org/ns/prov#>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
             PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
             
