@@ -14,7 +14,8 @@ import {
 class PublishRepository {
 
     /**
-     * Get Feedback that is ready to send to ipdc. It holds the verwerkt status.
+     * Get feedback that is ready to send to IPDC.
+     * Retrieves feedback with LPDC end status and IPDC start status that hasn't exceeded retry limits.
      */
     static getFeedbackToPublish = async function () {
         const result = await query(`
@@ -58,8 +59,8 @@ class PublishRepository {
     };
 
     /**
-     * Remove publication errors for failed feedback publications if they are older than a year.
-     *
+     * Remove old publication errors from the database.
+     * Deletes publication error records that are older than the configured expiration period.
      */
     static async clearPublicationErrors() {
         const yearAgo = subMonths(new Date(), ERROR_EXPIRATION_MONTHS);
@@ -83,6 +84,10 @@ class PublishRepository {
         await update(clearPublicationErrors);
     }
 
+    /**
+     * Send feedback data to IPDC endpoint via HTTP POST.
+     * Creates a publication error record if the request fails.
+     */
     static async sendFeedbackToIpdc(feedbackData) {
         const headers = {
             'x-api-key': IPDC_X_API_KEY,
@@ -112,6 +117,10 @@ class PublishRepository {
         }
     }
 
+    /**
+     * Create a publication error record in the database.
+     * Stores error details including status code, error message, and the payload that failed.
+     */
     static async createPublicationError(errorCode, errorMessage, payload) {
         const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuid()}`;
 
@@ -137,7 +146,10 @@ class PublishRepository {
         await update(insertPublicationError);
     }
 
-
+    /**
+     * Parse HTTP response body.
+     * Attempts to parse as JSON, returns plain text wrapped in object if parsing fails.
+     */
     static async getResponseBody(response) {
         const text = await response.text();
         try {
@@ -147,6 +159,10 @@ class PublishRepository {
         }
     }
 
+    /**
+     * Update feedback status after successful publication to IPDC.
+     * Changes status to published and records the publication timestamp.
+     */
     static async updateFeedbackOnSucces(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedback URI cannot be null.');
@@ -177,6 +193,10 @@ class PublishRepository {
         await update(updateFeedbackQuery);
     }
 
+    /**
+     * Increment the retry counter for a feedback publication attempt.
+     * Increases the counter by 1, initializing to 1 if it doesn't exist.
+     */
     static async incrementRetryCounter(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedback URI cannot be null.');
@@ -210,6 +230,10 @@ class PublishRepository {
       `);
     }
 
+    /**
+     * Find OVO URI for a bestuurseenheid via its OVO code.
+     * Extracts the OVO code from the bestuurseenheid and constructs the official OVO URI.
+     */
     static findOvoUriFromBestuurseenheidViaOvoCode = async function (bestuurseenheidUri) {
         if (!bestuurseenheidUri)
             throw new Error('bestuurseenheid URI cannot be null.');
@@ -237,6 +261,10 @@ class PublishRepository {
         return "https://data.vlaanderen.be/id/organisatie/" + result.results.bindings[0].ovoCode.value;
     };
 
+    /**
+     * Find OVO concept for a bestuurseenheid.
+     * Looks up the skos:Concept that matches the bestuurseenheid's OVO code.
+     */
     static findOvoConceptFromBestuurseenheid = async function (bestuurseenheidUri) {
         if (!bestuurseenheidUri)
             throw new Error('bestuurseenheid URI cannot be null.');

@@ -12,9 +12,9 @@ import {
 class LdesRepository {
 
     /**
-     * Get all snapshots from the ldes graph that have not been processed.
-     * To check if a snapshot has been processed, we look at if the same uri exists outside the ldes graph
-     * with the same prov:generatedAtTime
+     * Get all snapshots from the LDES graph that have not been processed.
+     * A snapshot is considered unprocessed if the same URI does not exist outside the LDES graph
+     * with the same prov:generatedAtTime.
      */
     static findToProcessSnapshots = async function () {
         const result = await query(`
@@ -41,9 +41,9 @@ class LdesRepository {
     }
 
     /**
-     * Extract sender and recipient organization URIs from a snapshot.
-     * - sender (from): schema:agent
-     * - recipient (to): schema:recipient
+     * Extract sender and recipient organization URIs from a feedback snapshot.
+     * The sender is identified via schema:agent and the recipient via schema:recipient
+     * on the question associated with the snapshot conversation.
      */
     static extractOrganizationUris = async function (snapshotUri) {
         if (!snapshotUri)
@@ -81,7 +81,8 @@ class LdesRepository {
     };
 
     /**
-     * Check if the given feedbackUri is already in lpdc data and return the org graph where this feedback resides.
+     * Check if feedback already exists in LPDC data and return the organization graph URI.
+     * Returns null if the feedback does not exist in any organization graph.
      */
     static getOrgGraphForExistingFeedback = async function (feedbackUri) {
         if (!feedbackUri)
@@ -109,8 +110,7 @@ class LdesRepository {
 
     /**
      * Copy feedback data from LDES graph to organization graph.
-     * This recursively copies all triples where feedbackUri is the subject,
-     * including nested blank nodes.
+     * This recursively copies all triples where feedbackUri is the subject.
      */
     static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph, transformedInstanceUri) {
         if (!feedbackUri)
@@ -182,7 +182,9 @@ class LdesRepository {
 
 
     /**
-     * Add feedbackUri to the unknown receiver graph.
+     * Add feedback to the unknown graph.
+     * Used when the recipient organization cannot be determined or matched.
+     * Deletes any existing error data for the feedback before inserting.
      */
     static addFeedbackToUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
@@ -224,7 +226,7 @@ class LdesRepository {
     };
 
     /**
-     * Remove feedbackUri from the unknown receiver graph.
+     * Remove feedback from the unknown graph.
      */
     static removeFeedbackFromUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
@@ -289,6 +291,11 @@ class LdesRepository {
         }
     };
 
+    /**
+     * Get the transformed LPDC instance URI associated with a feedback.
+     * Transforms the IPDC instance URI to LPDC format and verifies the instance exists.
+     * Returns null if the instance does not exist in LPDC.
+     */
     static async getTransformedInstanceUri(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedbackUri cannot be null.');
@@ -325,6 +332,10 @@ class LdesRepository {
 
     }
 
+    /**
+     * Check if feedback has IPDC start status.
+     * Returns true if the feedback is in the initial IPDC status state.
+     */
     static async isFeedbackInIpdcStartStatus(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedbackUri cannot be null.');
