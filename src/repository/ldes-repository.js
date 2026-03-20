@@ -12,23 +12,19 @@ import {
 class LdesRepository {
 
     /**
-     * Get all snapshots from the ldes graph that have not been processed.
-     * To check if a snapshot has been processed, we look at if the same uri exists outside the ldes graph
-     * with the same prov:generatedAtTime
+     * Get all snapshots from the LDES graph that have not been processed.
+     * A snapshot is considered unprocessed if the same URI does not exist outside the LDES graph
+     * with the same prov:generatedAtTime.
      */
     static findToProcessSnapshots = async function () {
         const result = await query(`
             PREFIX schema: <https://schema.org/>
-            PREFIX prov:   <https://www.w3.org/ns/prov#>
+            PREFIX prov:   <http://www.w3.org/ns/prov#>
 
             SELECT ?snapshotUri WHERE {
                 GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                      ?snapshotUri a schema:Conversation .
                      ?snapshotUri prov:generatedAtTime ?generatedAtTime .
-
-                     BIND(IF(isLiteral(?generatedAtTime) && STRSTARTS(str(datatype(?generatedAtTime)), "https://www.w3.org/"),
-                             STRDT(str(?generatedAtTime), IRI(REPLACE(str(datatype(?generatedAtTime)), "^https://", "http://"))),
-                             ?generatedAtTime) AS ?generatedAtTimeConverted)
                 }
                 FILTER NOT EXISTS {
                 GRAPH ?g {
@@ -36,7 +32,7 @@ class LdesRepository {
                     }
                 FILTER(
                     ?g != ${sparqlEscapeUri(LDES_GRAPH)} &&
-                    ?generatedAtTime2 = ?generatedAtTimeConverted)
+                    ?generatedAtTime2 = ?generatedAtTime)
                 }
             } ORDER BY ?generatedAtTime
         `);
@@ -45,9 +41,9 @@ class LdesRepository {
     }
 
     /**
-     * Extract sender and recipient organization URIs from a snapshot.
-     * - sender (from): schema:agent
-     * - recipient (to): schema:recipient
+     * Extract sender and recipient organization URIs from a feedback snapshot.
+     * The sender is identified via schema:agent and the recipient via schema:recipient
+     * on the question associated with the snapshot conversation.
      */
     static extractOrganizationUris = async function (snapshotUri) {
         if (!snapshotUri)
@@ -55,7 +51,6 @@ class LdesRepository {
 
         const result = await query(`
             PREFIX schema: <https://schema.org/>
-            PREFIX dct: <http://purl.org/dc/terms/>
 
             SELECT DISTINCT ?senderUri ?recipientUri WHERE {
                 GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
@@ -86,7 +81,8 @@ class LdesRepository {
     };
 
     /**
-     * Check if the given feedbackUri is already in lpdc data and return the org graph where this feedback resides.
+     * Check if feedback already exists in LPDC data and return the organization graph URI.
+     * Returns null if the feedback does not exist in any organization graph.
      */
     static getOrgGraphForExistingFeedback = async function (feedbackUri) {
         if (!feedbackUri)
@@ -114,8 +110,7 @@ class LdesRepository {
 
     /**
      * Copy feedback data from LDES graph to organization graph.
-     * This recursively copies all triples where feedbackUri is the subject,
-     * including nested blank nodes.
+     * This recursively copies all triples where feedbackUri is the subject.
      */
     static copyFeedbackToOrganizationGraph = async function (feedbackUri, bestuurseenheidUri, targetGraph, transformedInstanceUri) {
         if (!feedbackUri)
@@ -142,16 +137,16 @@ class LdesRepository {
 
           INSERT {
           GRAPH ${sparqlEscapeUri(targetGraph)} {
-              ${sparqlEscapeUri(feedbackUri)} ?p ?oReplacedFinal .
+              ${sparqlEscapeUri(feedbackUri)} ?p ?oReplaced .
 
               ${sparqlEscapeUri(feedbackUri)} skos:primarySubject ${sparqlEscapeUri(transformedInstanceUri)} .
               ${sparqlEscapeUri(feedbackUri)} lpdcExt:receiverBestuurseenheid ${sparqlEscapeUri(bestuurseenheidUri)} .
               ${sparqlEscapeUri(feedbackUri)} mu:uuid ${sparqlEscapeString(feedbackUuid)} .
 
-              ${sparqlEscapeUri(questionUri)} ?questionPred ?questionObjFixed .
+              ${sparqlEscapeUri(questionUri)} ?questionPred ?questionObj .
               ${sparqlEscapeUri(questionUri)} mu:uuid ${sparqlEscapeString(questionUuid)} .
 
-              ${sparqlEscapeUri(answerUri)} ?answerPred ?answerObjFixed .
+              ${sparqlEscapeUri(answerUri)} ?answerPred ?answerObj .
               ${sparqlEscapeUri(answerUri)} mu:uuid ${sparqlEscapeString(answerUuid)} .
           }
           }
@@ -163,30 +158,18 @@ class LdesRepository {
                       BIND(IF(?p = schema:question, ${sparqlEscapeUri(questionUri)},
                            IF(?p = schema:suggestedAnswer, ${sparqlEscapeUri(answerUri)},
                            ?o)) AS ?oReplaced)
-
-                      BIND(IF(isLiteral(?oReplaced) && STRSTARTS(str(datatype(?oReplaced)), "https://www.w3.org/"),
-                              STRDT(str(?oReplaced), IRI(REPLACE(str(datatype(?oReplaced)), "^https://", "http://"))),
-                              ?oReplaced) AS ?oReplacedFinal)
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} schema:question ?questionBlank .
                       ?questionBlank ?questionPred ?questionObj .
-
-                      BIND(IF(isLiteral(?questionObj) && STRSTARTS(str(datatype(?questionObj)), "https://www.w3.org/"),
-                              STRDT(str(?questionObj), IRI(REPLACE(str(datatype(?questionObj)), "^https://", "http://"))),
-                              ?questionObj) AS ?questionObjFixed)
                   }
               }
               OPTIONAL {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} schema:suggestedAnswer ?answerBlank .
                       ?answerBlank ?answerPred ?answerObj .
-
-                      BIND(IF(isLiteral(?answerObj) && STRSTARTS(str(datatype(?answerObj)), "https://www.w3.org/"),
-                              STRDT(str(?answerObj), IRI(REPLACE(str(datatype(?answerObj)), "^https://", "http://"))),
-                              ?answerObj) AS ?answerObjFixed)
                   }
               }
           }
@@ -199,7 +182,9 @@ class LdesRepository {
 
 
     /**
-     * Add feedbackUri to the unknown receiver graph.
+     * Add feedback to the unknown graph.
+     * Used when the recipient organization cannot be determined or matched.
+     * Deletes any existing error data for the feedback before inserting.
      */
     static addFeedbackToUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
@@ -207,9 +192,7 @@ class LdesRepository {
 
         await update(`
           PREFIX schema: <https://schema.org/>
-          PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-          PREFIX prov: <https://www.w3.org/ns/prov#>
+          PREFIX prov: <http://www.w3.org/ns/prov#>
 
           DELETE {
               GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
@@ -219,7 +202,7 @@ class LdesRepository {
           INSERT {
               GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
                   ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
-                  ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTimeConverted .
+                  ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
               }
           }
           WHERE {
@@ -227,10 +210,6 @@ class LdesRepository {
                   GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                       ${sparqlEscapeUri(feedbackUri)} a schema:Conversation .
                       ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime .
-
-                      BIND(IF(isLiteral(?generatedAtTime) && STRSTARTS(str(datatype(?generatedAtTime)), "https://www.w3.org/"),
-                              STRDT(str(?generatedAtTime), IRI(REPLACE(str(datatype(?generatedAtTime)), "^https://", "http://"))),
-                              ?generatedAtTime) AS ?generatedAtTimeConverted)
                   }
               }
               OPTIONAL {
@@ -247,15 +226,13 @@ class LdesRepository {
     };
 
     /**
-     * Remove feedbackUri from the unknown receiver graph.
+     * Remove feedback from the unknown graph.
      */
     static removeFeedbackFromUnknownGraph = async function (feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedbackUri cannot be null.');
 
         await update(`
-          PREFIX schema: <https://schema.org/>
-
           DELETE {
               GRAPH ${sparqlEscapeUri(UNKNOWN_GRAPH)} {
                   ${sparqlEscapeUri(feedbackUri)} ?p ?o .
@@ -283,9 +260,6 @@ class LdesRepository {
 
         await update(`
             PREFIX schema: <https://schema.org/>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-            PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
 
             DELETE {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
@@ -294,7 +268,7 @@ class LdesRepository {
             }
             INSERT {
                 GRAPH ${sparqlEscapeUri(targetGraph)} {
-                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNewFixed .
+                    ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
                 }
             }
             WHERE {
@@ -302,9 +276,6 @@ class LdesRepository {
                     GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
                         ${sparqlEscapeUri(feedbackUri)} ?pNew ?oNew .
                         FILTER (?pNew NOT IN (schema:suggestedAnswer, schema:question))
-                        BIND(IF(isLiteral(?oNew) && STRSTARTS(str(datatype(?oNew)), "https://www.w3.org/"),
-                                STRDT(str(?oNew), IRI(REPLACE(str(datatype(?oNew)), "^https://", "http://"))),
-                                ?oNew) AS ?oNewFixed)
                     }
                 }
                 OPTIONAL {
@@ -320,6 +291,11 @@ class LdesRepository {
         }
     };
 
+    /**
+     * Get the transformed LPDC instance URI associated with a feedback.
+     * Transforms the IPDC instance URI to LPDC format and verifies the instance exists.
+     * Returns null if the instance does not exist in LPDC.
+     */
     static async getTransformedInstanceUri(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedbackUri cannot be null.');
@@ -356,6 +332,10 @@ class LdesRepository {
 
     }
 
+    /**
+     * Check if feedback has IPDC start status.
+     * Returns true if the feedback is in the initial IPDC status state.
+     */
     static async isFeedbackInIpdcStartStatus(feedbackUri) {
         if (!feedbackUri)
             throw new Error('feedbackUri cannot be null.');

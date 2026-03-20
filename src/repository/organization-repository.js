@@ -8,8 +8,8 @@ const PUBLIC_GRAPH = 'http://mu.semte.ch/graphs/public';
 class OrganizationRepository {
 
     /**
-     * Check if an ovo organization exists as a skos:Concept in the database.
-     * Returns the concept with its label and notation if it exists.
+     * Check if an OVO organization exists as a skos:Concept in the database.
+     * Returns null if not found, otherwise returns the concept with its label and notation.
      */
     static findConceptByUri = async function (organizationUri) {
         if (!organizationUri)
