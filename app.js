@@ -67,7 +67,7 @@ async function handlePublish() {
                 if(!isOvoUri(feedback.payload.antwoord.van)){
                     feedback.payload.antwoord.van = await PublishRepository.findOvoConceptFromBestuurseenheid(feedback.payload.antwoord.van);
                 }
-                await PublishRepository.sendFeedbackToIpdc(feedback.payload);
+                await PublishRepository.sendFeedbackToIpdc(feedback);
                 await PublishRepository.updateFeedbackOnSucces(feedback.payload.feedbackId);
                 console.log(`Successfully published feedback ${feedback.payload.feedbackId} to ipdc`);
             } catch (e) {

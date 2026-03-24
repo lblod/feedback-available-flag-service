@@ -47,7 +47,7 @@ class PublishRepository {
 
         return result.results.bindings.map(binding => (
             {
-                retryCount: binding.retryCount?.value,
+                retryCount: binding.retryCount?.value ? parseInt(binding.retryCount.value) : undefined,
                 payload: {
                     feedbackId: binding.feedback?.value,
                     antwoord: {
@@ -65,8 +65,8 @@ class PublishRepository {
     static async clearPublicationErrors() {
         const yearAgo = subMonths(new Date(), ERROR_EXPIRATION_MONTHS);
         const clearPublicationErrors = `
-          PREFIX schema: <http://schema.org/>
-          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+          PREFIX oslc: <http://open-services.net/ns/core#>
+          PREFIX dct: <http://purl.org/dc/terms/>
           
           DELETE {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
@@ -74,9 +74,9 @@ class PublishRepository {
             }
           } WHERE {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
-                ?s a lpdcExt:FeedbackPublicationError ;
+                ?s a oslc:Error ;
                   ?p ?o ;
-                  schema:dateCreated ?dateCreated .
+                  dct:created ?dateCreated .
             }
             FILTER ( ?dateCreated < ${sparqlEscapeDateTime(yearAgo)} )
           }
@@ -99,21 +99,23 @@ class PublishRepository {
         const response = await fetch(IPDC_JSON_ENDPOINT, {
             method: "POST",
             headers,
-            body: JSON.stringify(feedbackData),
+            body: JSON.stringify(feedbackData.payload),
         });
 
         if (!response.ok) {
             const responseBody = await PublishRepository.getResponseBody(response);
             try {
-                await PublishRepository.createPublicationError(response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData));
+                if(feedbackData.retryCount === RETRY_COUNTER_LIMIT - 1 ){
+                    await PublishRepository.createPublicationError(feedbackData.payload.feedbackId, response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData.payload));
+                }
             } catch (e) {
                 console.log('Could not save publicationError', e);
             }
             throw new Error("Something went wrong when submitting to IPDC: \n" + "IPDC response: " + JSON.stringify(responseBody) + "\n"
                 + "Response status code: " + response.status + "\n"
-                + "Data sent to IPDC: " + JSON.stringify(feedbackData));
+                + "Data sent to IPDC: " + JSON.stringify(feedbackData.payload));
         } else {
-            console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData));
+            console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData.payload));
         }
     }
 
@@ -121,22 +123,27 @@ class PublishRepository {
      * Create a publication error record in the database.
      * Stores error details including status code, error message, and the payload that failed.
      */
-    static async createPublicationError(errorCode, errorMessage, payload) {
-        const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuid()}`;
+    static async createPublicationError(feedbackUri, errorCode, errorMessage, payload) {
+        const uuidError = uuid()
+        const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuidError}`;
 
         const triples = [
-            `${sparqlEscapeUri(publicationErrorIri)} a lpdcExt:FeedbackPublicationError .`,
-            errorCode ? `${sparqlEscapeUri(publicationErrorIri)} http:statusCode ${sparqlEscapeInt(errorCode)} .` : undefined,
-            errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} schema:error ${sparqlEscapeString(errorMessage)} .` : undefined,
+            `${sparqlEscapeUri(publicationErrorIri)} a oslc:Error . `,
+            `${sparqlEscapeUri(publicationErrorIri)} mu:uuid ${sparqlEscapeString(uuidError)}. `,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:subject ${sparqlEscapeString("lpdc-feedback-management-service")}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:creator ${sparqlEscapeUri("http://lblod.data.gift/services/lpdc-feedback-management-service")}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:references ${sparqlEscapeUri(feedbackUri)}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} oslc:message ${sparqlEscapeString("Publishing feedback to IPDC failed.")}.`,
+            errorCode && errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} oslc:largePreview ${sparqlEscapeString(errorCode + " " + errorMessage)} .` : undefined,
             payload ? `${sparqlEscapeUri(publicationErrorIri)} http:body ${sparqlEscapeString(payload)} .` : undefined,
-            `${sparqlEscapeUri(publicationErrorIri)} schema:dateCreated ${sparqlEscapeDateTime(new Date())} .`
+            `${sparqlEscapeUri(publicationErrorIri)} dct:created ${sparqlEscapeDateTime(new Date())} .`
         ].filter(it => !!it);
 
         const insertPublicationError = `
-          PREFIX schema: <http://schema.org/>
           PREFIX http: <http://www.w3.org/2011/http#>
-          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-
+          PREFIX oslc: <http://open-services.net/ns/core#>
+          PREFIX dct: <http://purl.org/dc/terms/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           
           INSERT DATA {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
