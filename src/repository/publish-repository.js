@@ -93,7 +93,6 @@ class PublishRepository {
             'x-api-key': IPDC_X_API_KEY,
             'Content-Type': 'application/ld+json',
             'Accept': 'application/ld+json'
-
         };
 
         const response = await fetch(IPDC_JSON_ENDPOINT, {
@@ -104,26 +103,19 @@ class PublishRepository {
 
         if (!response.ok) {
             const responseBody = await PublishRepository.getResponseBody(response);
-            try {
-                if(feedbackData.retryCount === RETRY_COUNTER_LIMIT - 1 ){
-                    await PublishRepository.createPublicationError(feedbackData.payload.feedbackId, response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData.payload));
-                }
-            } catch (e) {
-                console.log('Could not save publicationError', e);
-            }
             throw new Error("Something went wrong when submitting to IPDC: \n" + "IPDC response: " + JSON.stringify(responseBody) + "\n"
                 + "Response status code: " + response.status + "\n"
                 + "Data sent to IPDC: " + JSON.stringify(feedbackData.payload));
-        } else {
-            console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData.payload));
         }
+
+        console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData.payload));
     }
 
     /**
      * Create a publication error record in the database.
      * Stores error details including status code, error message, and the payload that failed.
      */
-    static async createPublicationError(feedbackUri, errorCode, errorMessage, payload) {
+    static async createPublicationError(feedbackUri, errorMessage, payload) {
         const uuidError = uuid()
         const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuidError}`;
 
@@ -134,7 +126,7 @@ class PublishRepository {
             `${sparqlEscapeUri(publicationErrorIri)} dct:creator ${sparqlEscapeUri("http://lblod.data.gift/services/lpdc-feedback-management-service")}.`,
             `${sparqlEscapeUri(publicationErrorIri)} dct:references ${sparqlEscapeUri(feedbackUri)}.`,
             `${sparqlEscapeUri(publicationErrorIri)} oslc:message ${sparqlEscapeString("Publishing feedback to IPDC failed.")}.`,
-            errorCode && errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} oslc:largePreview ${sparqlEscapeString(errorCode + " " + errorMessage)} .` : undefined,
+             errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} oslc:largePreview ${sparqlEscapeString(errorMessage)} .` : undefined,
             payload ? `${sparqlEscapeUri(publicationErrorIri)} http:body ${sparqlEscapeString(payload)} .` : undefined,
             `${sparqlEscapeUri(publicationErrorIri)} dct:created ${sparqlEscapeDateTime(new Date())} .`
         ].filter(it => !!it);

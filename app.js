@@ -73,6 +73,18 @@ async function handlePublish() {
             } catch (e) {
                 await PublishRepository.incrementRetryCounter(feedback.payload.feedbackId);
                 const retriesLeft = RETRY_COUNTER_LIMIT - (feedback.retryCount ?? 0) - 1;
+                if (retriesLeft <= 0) {
+                    try {
+                        await PublishRepository.createPublicationError(
+                            feedback.payload.feedbackId,
+                            e.message,
+                            JSON.stringify(feedback.payload)
+                        );
+                    } catch (publicationErrorErr) {
+                        console.log('Could not save publicationError', publicationErrorErr);
+                    }
+                }
+
                 console.error(
                     `Could not publish ${feedback.payload.feedbackId}, ${retriesLeft} ${retriesLeft === 1 ? "retry" : "retries"} left${
                         retriesLeft === 0 ? ", giving up" : ""
