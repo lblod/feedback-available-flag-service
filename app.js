@@ -67,12 +67,24 @@ async function handlePublish() {
                 if(!isOvoUri(feedback.payload.antwoord.van)){
                     feedback.payload.antwoord.van = await PublishRepository.findOvoConceptFromBestuurseenheid(feedback.payload.antwoord.van);
                 }
-                await PublishRepository.sendFeedbackToIpdc(feedback.payload);
+                await PublishRepository.sendFeedbackToIpdc(feedback);
                 await PublishRepository.updateFeedbackOnSucces(feedback.payload.feedbackId);
                 console.log(`Successfully published feedback ${feedback.payload.feedbackId} to ipdc`);
             } catch (e) {
                 await PublishRepository.incrementRetryCounter(feedback.payload.feedbackId);
                 const retriesLeft = RETRY_COUNTER_LIMIT - (feedback.retryCount ?? 0) - 1;
+                if (retriesLeft <= 0) {
+                    try {
+                        await PublishRepository.createPublicationError(
+                            feedback.payload.feedbackId,
+                            e.message,
+                            JSON.stringify(feedback.payload)
+                        );
+                    } catch (publicationErrorErr) {
+                        console.log('Could not save publicationError', publicationErrorErr);
+                    }
+                }
+
                 console.error(
                     `Could not publish ${feedback.payload.feedbackId}, ${retriesLeft} ${retriesLeft === 1 ? "retry" : "retries"} left${
                         retriesLeft === 0 ? ", giving up" : ""

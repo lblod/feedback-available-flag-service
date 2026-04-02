@@ -7,9 +7,17 @@ import {
     IPDC_STATUS_START_URI, IPDC_X_API_KEY,
     LDES_GRAPH,
     LPDC_STATUS_END_URI,
+    LPDC_PROCESSING_STATUS_PREDICATE,
+    LPDC_PROCESSING_STATUS_ACCEPTED_URI,
+    LPDC_PROCESSING_STATUS_DENIED_URI,
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_PUBLISHED_URI, RETRY_COUNTER_LIMIT
 } from "../../env.js";
+
+const LPDC_PROCESSING_STATUS_LABELS = {
+    [LPDC_PROCESSING_STATUS_ACCEPTED_URI]: 'geaccepteerd',
+    [LPDC_PROCESSING_STATUS_DENIED_URI]: 'geweigerd',
+};
 
 class PublishRepository {
 
@@ -22,12 +30,13 @@ class PublishRepository {
             PREFIX schema2: <https://schema.org/>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
             PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-            
-            SELECT ?feedback ?van ?antwoord ?retryCount WHERE {
+
+            SELECT ?feedback ?van ?antwoord ?processingStatus ?retryCount WHERE {
                 GRAPH ?g {
                      ?feedback a schema2:Conversation .
                      ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
                      ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
+                     ?feedback ${sparqlEscapeUri(LPDC_PROCESSING_STATUS_PREDICATE)} ?processingStatus.
                      ?feedback mu:uuid ?uuid .
                      ?feedback schema2:suggestedAnswer ?answer .
                      ?answer schema2:resultComment ?antwoord .
@@ -35,7 +44,7 @@ class PublishRepository {
                 OPTIONAL {
                     ?feedback ext:publishRetryCount ?retryCount .
                     }
-                }  
+                }
                 FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)})
                 FILTER(COALESCE(?retryCount, 0) < ${sparqlEscapeInt(RETRY_COUNTER_LIMIT)})
                 }
@@ -45,17 +54,24 @@ class PublishRepository {
             return [];
         }
 
-        return result.results.bindings.map(binding => (
-            {
-                retryCount: binding.retryCount?.value,
+        return result.results.bindings.map(binding => {
+            const processingStatus = binding.processingStatus?.value;
+            const originalAnswer = binding.antwoord?.value;
+            let injectedText = "";
+            if(processingStatus && LPDC_PROCESSING_STATUS_LABELS[processingStatus]){
+              injectedText = `De feedback is ${LPDC_PROCESSING_STATUS_LABELS[processingStatus]}.\n\n`;
+            }
+
+            return {
+                retryCount: binding.retryCount?.value ? parseInt(binding.retryCount.value) : undefined,
                 payload: {
                     feedbackId: binding.feedback?.value,
                     antwoord: {
-                        van: binding.van?.value, antwoord: binding.antwoord?.value
+                        van: binding.van?.value, antwoord: `${injectedText}${originalAnswer}`,
                     }
                 }
             }
-        ));
+        });
     };
 
     /**
@@ -65,8 +81,8 @@ class PublishRepository {
     static async clearPublicationErrors() {
         const yearAgo = subMonths(new Date(), ERROR_EXPIRATION_MONTHS);
         const clearPublicationErrors = `
-          PREFIX schema: <http://schema.org/>
-          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
+          PREFIX oslc: <http://open-services.net/ns/core#>
+          PREFIX dct: <http://purl.org/dc/terms/>
           
           DELETE {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
@@ -74,9 +90,9 @@ class PublishRepository {
             }
           } WHERE {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
-                ?s a lpdcExt:FeedbackPublicationError ;
+                ?s a oslc:Error ;
                   ?p ?o ;
-                  schema:dateCreated ?dateCreated .
+                  dct:created ?dateCreated .
             }
             FILTER ( ?dateCreated < ${sparqlEscapeDateTime(yearAgo)} )
           }
@@ -93,50 +109,49 @@ class PublishRepository {
             'x-api-key': IPDC_X_API_KEY,
             'Content-Type': 'application/ld+json',
             'Accept': 'application/ld+json'
-
         };
 
         const response = await fetch(IPDC_JSON_ENDPOINT, {
             method: "POST",
             headers,
-            body: JSON.stringify(feedbackData),
+            body: JSON.stringify(feedbackData.payload),
         });
 
         if (!response.ok) {
             const responseBody = await PublishRepository.getResponseBody(response);
-            try {
-                await PublishRepository.createPublicationError(response.status, JSON.stringify(responseBody), JSON.stringify(feedbackData));
-            } catch (e) {
-                console.log('Could not save publicationError', e);
-            }
             throw new Error("Something went wrong when submitting to IPDC: \n" + "IPDC response: " + JSON.stringify(responseBody) + "\n"
                 + "Response status code: " + response.status + "\n"
-                + "Data sent to IPDC: " + JSON.stringify(feedbackData));
-        } else {
-            console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData));
+                + "Data sent to IPDC: " + JSON.stringify(feedbackData.payload));
         }
+
+        console.log("Successfully sent data to IPDC: \n" + JSON.stringify(feedbackData.payload));
     }
 
     /**
      * Create a publication error record in the database.
      * Stores error details including status code, error message, and the payload that failed.
      */
-    static async createPublicationError(errorCode, errorMessage, payload) {
-        const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuid()}`;
+    static async createPublicationError(feedbackUri, errorMessage, payload) {
+        const uuidError = uuid()
+        const publicationErrorIri = `http://data.lblod.info/id/feedback-publication-error/${uuidError}`;
 
         const triples = [
-            `${sparqlEscapeUri(publicationErrorIri)} a lpdcExt:FeedbackPublicationError .`,
-            errorCode ? `${sparqlEscapeUri(publicationErrorIri)} http:statusCode ${sparqlEscapeInt(errorCode)} .` : undefined,
-            errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} schema:error ${sparqlEscapeString(errorMessage)} .` : undefined,
+            `${sparqlEscapeUri(publicationErrorIri)} a oslc:Error . `,
+            `${sparqlEscapeUri(publicationErrorIri)} mu:uuid ${sparqlEscapeString(uuidError)}. `,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:subject ${sparqlEscapeString("lpdc-feedback-management-service")}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:creator ${sparqlEscapeUri("http://lblod.data.gift/services/lpdc-feedback-management-service")}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} dct:references ${sparqlEscapeUri(feedbackUri)}.`,
+            `${sparqlEscapeUri(publicationErrorIri)} oslc:message ${sparqlEscapeString("Publishing feedback to IPDC failed.")}.`,
+             errorMessage ? `${sparqlEscapeUri(publicationErrorIri)} oslc:largePreview ${sparqlEscapeString(errorMessage)} .` : undefined,
             payload ? `${sparqlEscapeUri(publicationErrorIri)} http:body ${sparqlEscapeString(payload)} .` : undefined,
-            `${sparqlEscapeUri(publicationErrorIri)} schema:dateCreated ${sparqlEscapeDateTime(new Date())} .`
+            `${sparqlEscapeUri(publicationErrorIri)} dct:created ${sparqlEscapeDateTime(new Date())} .`
         ].filter(it => !!it);
 
         const insertPublicationError = `
-          PREFIX schema: <http://schema.org/>
           PREFIX http: <http://www.w3.org/2011/http#>
-          PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
-
+          PREFIX oslc: <http://open-services.net/ns/core#>
+          PREFIX dct: <http://purl.org/dc/terms/>
+          PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
           
           INSERT DATA {
             GRAPH <http://mu.semte.ch/graphs/lpdc/ipdc-feedback-publication-errors> {
