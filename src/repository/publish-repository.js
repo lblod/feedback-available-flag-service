@@ -7,9 +7,17 @@ import {
     IPDC_STATUS_START_URI, IPDC_X_API_KEY,
     LDES_GRAPH,
     LPDC_STATUS_END_URI,
+    LPDC_PROCESSING_STATUS_PREDICATE,
+    LPDC_PROCESSING_STATUS_ACCEPTED_URI,
+    LPDC_PROCESSING_STATUS_DENIED_URI,
     LPDC_STATUS_PREDICATE,
     LPDC_STATUS_PUBLISHED_URI, RETRY_COUNTER_LIMIT
 } from "../../env.js";
+
+const LPDC_PROCESSING_STATUS_LABELS = {
+    [LPDC_PROCESSING_STATUS_ACCEPTED_URI]: 'geaccepteerd',
+    [LPDC_PROCESSING_STATUS_DENIED_URI]: 'geweigerd',
+};
 
 class PublishRepository {
 
@@ -22,12 +30,13 @@ class PublishRepository {
             PREFIX schema2: <https://schema.org/>
             PREFIX mu: <http://mu.semte.ch/vocabularies/core/>
             PREFIX ext: <http://mu.semte.ch/vocabularies/ext/>
-            
-            SELECT ?feedback ?van ?antwoord ?retryCount WHERE {
+
+            SELECT ?feedback ?van ?antwoord ?processingStatus ?retryCount WHERE {
                 GRAPH ?g {
                      ?feedback a schema2:Conversation .
                      ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_END_URI)}.
                      ?feedback ${sparqlEscapeUri(IPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(IPDC_STATUS_START_URI)}.
+                     ?feedback ${sparqlEscapeUri(LPDC_PROCESSING_STATUS_PREDICATE)} ?processingStatus.
                      ?feedback mu:uuid ?uuid .
                      ?feedback schema2:suggestedAnswer ?answer .
                      ?answer schema2:resultComment ?antwoord .
@@ -35,7 +44,7 @@ class PublishRepository {
                 OPTIONAL {
                     ?feedback ext:publishRetryCount ?retryCount .
                     }
-                }  
+                }
                 FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)})
                 FILTER(COALESCE(?retryCount, 0) < ${sparqlEscapeInt(RETRY_COUNTER_LIMIT)})
                 }
@@ -45,17 +54,24 @@ class PublishRepository {
             return [];
         }
 
-        return result.results.bindings.map(binding => (
-            {
+        return result.results.bindings.map(binding => {
+            const processingStatus = binding.processingStatus?.value;
+            const originalAnswer = binding.antwoord?.value;
+            let injectedText = "";
+            if(processingStatus && LPDC_PROCESSING_STATUS_LABELS[processingStatus]){
+              injectedText = `De feedback is ${LPDC_PROCESSING_STATUS_LABELS[processingStatus]}.\n\n`;
+            }
+
+            return {
                 retryCount: binding.retryCount?.value ? parseInt(binding.retryCount.value) : undefined,
                 payload: {
                     feedbackId: binding.feedback?.value,
                     antwoord: {
-                        van: binding.van?.value, antwoord: binding.antwoord?.value
+                        van: binding.van?.value, antwoord: `${injectedText}${originalAnswer}`,
                     }
                 }
             }
-        ));
+        });
     };
 
     /**
