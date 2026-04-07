@@ -129,7 +129,7 @@ class LdesService {
 
         if (!bestuurseenheid) {
             await LdesRepository.addFeedbackToUnknownGraph(feedbackUri)
-            throw new Error(`  ✗ No bestuurseenheid found for: ${recipientConcept} added ${feedbackUri} to the unknown graph `);
+            throw new Error(`  ✗ No bestuurseenheid found for: ${JSON.stringify(recipientConcept)} added ${feedbackUri} to the unknown graph `);
         }
 
         if (DEBUG) {
