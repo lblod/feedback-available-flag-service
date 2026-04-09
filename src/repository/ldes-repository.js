@@ -17,7 +17,7 @@ class LdesRepository {
      * with the same prov:generatedAtTime.
      */
     static findToProcessSnapshots = async function () {
-        const result = await query(`
+        const result = await query(/* sparql */`
             PREFIX schema: <https://schema.org/>
             PREFIX prov:   <http://www.w3.org/ns/prov#>
 
@@ -27,12 +27,13 @@ class LdesRepository {
                      ?snapshotUri prov:generatedAtTime ?generatedAtTime .
                 }
                 FILTER NOT EXISTS {
-                GRAPH ?g {
+                    GRAPH ?g {
                         ?snapshotUri prov:generatedAtTime ?generatedAtTime2 .
                     }
-                FILTER(
-                    ?g != ${sparqlEscapeUri(LDES_GRAPH)} &&
-                    ?generatedAtTime2 = ?generatedAtTime)
+                    FILTER(
+                        ?g != ${sparqlEscapeUri(LDES_GRAPH)} &&
+                        (?generatedAtTime2 = ?generatedAtTime || ?generatedAtTime2 > ?generatedAtTime)
+                    )
                 }
             } ORDER BY ?generatedAtTime
         `);
@@ -106,6 +107,30 @@ class LdesRepository {
             return null;
         }
     };
+
+    /**
+     * Checks if the current or a newer version of the given feedback uri is already processed
+     */
+    static feedbackVersionIsAlreadyProcessed = async function (feedbackUri) {
+        if (!feedbackUri)
+            throw new Error('feedbackUri cannot be null.');
+        const result = await query(/* sparql */`
+            PREFIX schema: <https://schema.org/>
+
+            SELECT ?laterGeneratedAtTime  
+            WHERE {
+                GRAPH ?g {
+                    ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?laterGeneratedAtTime.
+                }
+                GRAPH ${sparqlEscapeUri(LDES_GRAPH)} {
+                    ${sparqlEscapeUri(feedbackUri)} prov:generatedAtTime ?generatedAtTime.
+                }
+                FILTER(?laterGeneratedAtTime >= ?generatedAtTime)
+                FILTER(?g != ${sparqlEscapeUri(LDES_GRAPH)})
+            }
+        `);
+        return result.results.bindings.length > 0;
+    }
 
 
     /**
