@@ -18,11 +18,16 @@ class LdesService {
         for (const feedbackUri of feedbackUris) {
             try {
                 console.log(`\n--- Processing snapshot: ${feedbackUri} ---`);
+                const isAlreadyProcessed = await LdesRepository.feedbackVersionIsAlreadyProcessed(feedbackUri);
+                if(isAlreadyProcessed){
+                    console.log(`⚠ Snapshot has already been processed, skipping...: ${feedbackUri}`);
+                    continue;
+                } 
                 const lpdcFeedbackOrganizationGraph = await LdesRepository.getOrgGraphForExistingFeedback(feedbackUri);
                 if (lpdcFeedbackOrganizationGraph) {
                     await LdesRepository.updateFeedbackInOrganizationGraph(feedbackUri, lpdcFeedbackOrganizationGraph);
                 } else {
-                    await LdesService.createNewFeedbackFromSnapshot(feedbackUri)
+                    await LdesService.createNewFeedbackFromSnapshot(feedbackUri);
                 }
                 console.log(`✓ Successfully processed snapshot: ${feedbackUri}`);
             } catch (error) {
