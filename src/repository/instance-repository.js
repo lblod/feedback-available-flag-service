@@ -1,4 +1,4 @@
-import {sparqlEscapeUri, sparqlEscapeBool} from 'mu';
+import {sparqlEscapeUri, sparqlEscapeBool, sparqlEscapeDateTime } from 'mu';
 import {querySudo as query, updateSudo as update} from '@lblod/mu-auth-sudo';
 import {
     INSTANCE_TYPE,
@@ -21,7 +21,7 @@ class InstanceRepository {
             throw new Error('uri can not be null.');
         const result = await query(`
       PREFIX schema2: <https://schema.org/>
-      
+
       SELECT DISTINCT ?instance WHERE {
         VALUES ?uri { ${sparqlEscapeUri(uri)} }
         ?uri a schema2:Conversation.
@@ -36,30 +36,35 @@ class InstanceRepository {
     };
 
     /**
-     * Updates the flagged property on an instance with given uri.
+     * Updates the flagged property on an instance with given uri. Update the feedbackModifiedDate if the flag is set to true.
      *
      */
     static updateInstanceFlagged = async function (instanceUri, flagged) {
         if (!instanceUri)
             throw new Error('instanceUri can not be null.');
 
+      const now = new Date();
+      if(flagged) console.log('UPDATING INSTANCE FLAGGED', instanceUri, now, now.toISOString());
         await update(`
       PREFIX lpdcExt: <https://productencatalogus.data.vlaanderen.be/ns/ipdc-lpdc#>
 
       DELETE {
         GRAPH ?g {
             ${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackAvailable ?oldValue .
+            ${flagged ? `${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackModifiedDate ?oldDate .` : ''}
         }
       }
       INSERT {
         GRAPH ?g {
             ${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackAvailable ${sparqlEscapeBool(flagged)} .
+            ${flagged ? `${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackModifiedDate ${sparqlEscapeDateTime(now.toISOString())} .` : ''}
         }
       }
       WHERE {
         GRAPH ?g {
         ${sparqlEscapeUri(instanceUri)} a ${sparqlEscapeUri(INSTANCE_TYPE)}.
         OPTIONAL { ${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackAvailable ?oldValue . }
+        OPTIONAL { ${sparqlEscapeUri(instanceUri)} lpdcExt:feedbackModifiedDate ?oldDate . }
         }
       }
     `);
@@ -119,7 +124,7 @@ class InstanceRepository {
           FILTER NOT EXISTS {
             ?feedback ${sparqlEscapeUri(LPDC_STATUS_PREDICATE)} ${sparqlEscapeUri(LPDC_STATUS_PUBLISHED_URI)}.
           }
-          
+
         }
       }
     `);
